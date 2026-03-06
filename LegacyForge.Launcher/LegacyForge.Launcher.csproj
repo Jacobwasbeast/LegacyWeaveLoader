@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>LegacyForge.Launcher</RootNamespace>
+    <AssemblyName>LegacyForge</AssemblyName>
+    <Description>LegacyForge launcher - injects the mod loader runtime into Minecraft Legacy Edition</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>
