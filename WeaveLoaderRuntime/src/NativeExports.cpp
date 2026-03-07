@@ -2,6 +2,7 @@
 #include "IdRegistry.h"
 #include "CreativeInventory.h"
 #include "GameObjectFactory.h"
+#include "FurnaceRecipeRegistry.h"
 #include "ModStrings.h"
 #include "LogUtil.h"
 #include <Windows.h>
@@ -16,6 +17,19 @@ static std::wstring Utf8ToWide(const char* utf8)
     std::wstring result(len - 1, 0);
     MultiByteToWideChar(CP_UTF8, 0, utf8, -1, &result[0], len);
     return result;
+}
+
+static int ResolveRecipeId(const char* namespacedId, bool preferItem)
+{
+    if (!namespacedId || !namespacedId[0]) return -1;
+
+    int itemId = IdRegistry::Instance().GetNumericId(IdRegistry::Type::Item, namespacedId);
+    int blockId = IdRegistry::Instance().GetNumericId(IdRegistry::Type::Block, namespacedId);
+
+    if (preferItem)
+        return (itemId >= 0) ? itemId : blockId;
+
+    return (blockId >= 0) ? blockId : itemId;
 }
 
 extern "C"
@@ -147,7 +161,29 @@ void native_add_furnace_recipe(
     const char* outputId,
     float xp)
 {
-    LogUtil::Log("[WeaveLoader] Added furnace recipe: %s -> %s (%.1f xp)", inputId, outputId, xp);
+    int inputNumeric = ResolveRecipeId(inputId, false);
+    int outputNumeric = ResolveRecipeId(outputId, true);
+
+    if (inputNumeric < 0)
+    {
+        LogUtil::Log("[WeaveLoader] Failed furnace recipe: unknown input '%s'", inputId ? inputId : "(null)");
+        return;
+    }
+
+    if (outputNumeric < 0)
+    {
+        LogUtil::Log("[WeaveLoader] Failed furnace recipe: unknown output '%s'", outputId ? outputId : "(null)");
+        return;
+    }
+
+    if (!FurnaceRecipeRegistry::AddRecipe(inputNumeric, outputNumeric, xp))
+    {
+        LogUtil::Log("[WeaveLoader] Failed furnace recipe: %s -> %s (%.1f xp)", inputId, outputId, xp);
+        return;
+    }
+
+    LogUtil::Log("[WeaveLoader] Added furnace recipe: %s[%d] -> %s[%d] (%.1f xp)",
+                 inputId, inputNumeric, outputId, outputNumeric, xp);
 }
 
 void native_log(const char* message, int level)

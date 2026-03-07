@@ -88,6 +88,7 @@ add_library(WeaveLoaderRuntime SHARED
     src/IdRegistry.cpp
     src/NativeExports.cpp
     src/CreativeInventory.cpp
+    src/FurnaceRecipeRegistry.cpp
     src/MainMenuOverlay.cpp
     src/GameObjectFactory.cpp
     src/ModStrings.cpp

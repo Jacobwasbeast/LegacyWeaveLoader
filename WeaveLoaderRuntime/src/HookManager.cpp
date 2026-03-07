@@ -6,6 +6,7 @@
 #include "CreativeInventory.h"
 #include "MainMenuOverlay.h"
 #include "GameObjectFactory.h"
+#include "FurnaceRecipeRegistry.h"
 #include "LogUtil.h"
 #include <MinHook.h>
 
@@ -68,6 +69,7 @@ bool HookManager::Install(const SymbolResolver& symbols)
     }
 
     GameObjectFactory::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
+    FurnaceRecipeRegistry::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
 
     if (symbols.pLoadUVs && symbols.pSimpleIconCtor && symbols.pOperatorNew)
     {
