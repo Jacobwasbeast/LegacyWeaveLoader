@@ -1,13 +1,13 @@
-# Contributing to LegacyForge
+# Contributing to Weave Loader
 
-Thank you for your interest in contributing to LegacyForge!
+Thank you for your interest in contributing to Weave Loader!
 
 ## Project Structure
 
-- **LegacyForge.Launcher/** -- C# console app that launches the game and injects the runtime DLL
-- **LegacyForgeRuntime/** -- C++ DLL injected into the game process (hooks, .NET hosting, native exports)
-- **LegacyForge.Core/** -- C# assembly loaded inside the game process (mod discovery, lifecycle management)
-- **LegacyForge.API/** -- C# class library that mod authors reference (IMod, Registry, Events)
+- **WeaveLoader.Launcher/** -- C# console app that launches the game and injects the runtime DLL
+- **WeaveLoaderRuntime/** -- C++ DLL injected into the game process (hooks, .NET hosting, native exports)
+- **WeaveLoader.Core/** -- C# assembly loaded inside the game process (mod discovery, lifecycle management)
+- **WeaveLoader.API/** -- C# class library that mod authors reference (IMod, Registry, Events)
 - **ExampleMod/** -- Sample mod demonstrating the API
 
 ## Building
@@ -21,7 +21,7 @@ Thank you for your interest in contributing to LegacyForge!
 ### C++ Runtime
 
 ```bash
-cd LegacyForgeRuntime
+cd WeaveLoaderRuntime
 cmake -B build -A x64
 cmake --build build --config Release
 ```
@@ -29,7 +29,7 @@ cmake --build build --config Release
 ### C# Projects
 
 ```bash
-dotnet build LegacyForge.sln -c Release
+dotnet build Weave Loader.sln -c Release
 ```
 
 ## Guidelines

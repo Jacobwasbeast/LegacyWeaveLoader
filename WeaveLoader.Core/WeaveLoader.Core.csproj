@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>WeaveLoader.Core</RootNamespace>
+    <AssemblyName>WeaveLoader.Core</AssemblyName>
+    <Description>WeaveLoader core runtime - mod discovery and lifecycle management</Description>
+    <Version>1.0.0</Version>
+    <OutputPath>..\build</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WeaveLoader.API\WeaveLoader.API.csproj" />
+  </ItemGroup>
+
+</Project>

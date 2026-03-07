@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>ExampleMod</RootNamespace>
     <AssemblyName>ExampleMod</AssemblyName>
-    <Description>Example mod for LegacyForge demonstrating the mod API</Description>
+    <Description>Example mod for WeaveLoader demonstrating the mod API</Description>
     <Version>1.0.0</Version>
     <OutputPath>..\build\mods\ExampleMod</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -14,8 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Private=false: do not copy LegacyForge.API into ExampleMod. API lives in mods/LegacyForge.API/ -->
-    <ProjectReference Include="..\LegacyForge.API\LegacyForge.API.csproj">
+    <!-- Private=false: do not copy WeaveLoader.API into ExampleMod. API lives in mods/WeaveLoader.API/ -->
+    <ProjectReference Include="..\WeaveLoader.API\WeaveLoader.API.csproj">
       <Private>false</Private>
     </ProjectReference>
   </ItemGroup>

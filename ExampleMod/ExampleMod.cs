@@ -1,12 +1,12 @@
-using LegacyForge.API;
-using LegacyForge.API.Block;
-using LegacyForge.API.Item;
-using LegacyForge.API.Events;
+using WeaveLoader.API;
+using WeaveLoader.API.Block;
+using WeaveLoader.API.Item;
+using WeaveLoader.API.Events;
 
 namespace ExampleMod;
 
-[Mod("examplemod", Name = "Example Mod", Version = "1.0.0", Author = "LegacyForge",
-     Description = "A sample mod demonstrating the LegacyForge API")]
+[Mod("examplemod", Name = "Example Mod", Version = "1.0.0", Author = "WeaveLoader",
+     Description = "A sample mod demonstrating the WeaveLoader API")]
 public class ExampleMod : IMod
 {
     public static RegisteredBlock? RubyOre;

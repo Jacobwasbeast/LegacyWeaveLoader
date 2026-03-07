@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>WeaveLoader.API</RootNamespace>
+    <AssemblyName>WeaveLoader.API</AssemblyName>
+    <Description>Mod API for WeaveLoader - Minecraft Legacy Edition mod loader</Description>
+    <Version>1.0.0</Version>
+    <OutputPath>..\build\mods\WeaveLoader.API</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+</Project>

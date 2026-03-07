@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>WeaveLoader.Launcher</RootNamespace>
+    <AssemblyName>WeaveLoader</AssemblyName>
+    <Description>WeaveLoader launcher - injects the mod loader runtime into Minecraft Legacy Edition</Description>
+    <Version>1.0.0</Version>
+    <OutputPath>..\build</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <!-- Build the C++ runtime DLL via CMake before the launcher -->
+  <Target Name="BuildNativeRuntime" BeforeTargets="Build">
+    <Message Importance="high" Text="[WeaveLoader] Configuring C++ runtime with CMake..." />
+    <Exec Command="cmake -B &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime\build&quot; -S &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime&quot; -A x64"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime" />
+    <Message Importance="high" Text="[WeaveLoader] Building C++ runtime..." />
+    <Exec Command="cmake --build &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime\build&quot; --config $(Configuration)"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime" />
+  </Target>
+
+  <!-- Copy the runtimeconfig.json to the build output -->
+  <Target Name="CopyRuntimeConfig" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\WeaveLoader.Core\WeaveLoader.Core.runtimeconfig.json"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
