@@ -11,5 +11,14 @@ namespace PdbParser
     // Logs all symbols whose name contains the given substring (for debugging).
     void DumpMatching(const char* substring);
 
+    // Builds a sorted index of all symbols for reverse RVA->name lookup.
+    // Must be called while PDB is open. The index survives Close().
+    void BuildAddressIndex();
+
+    // Reverse lookup: given an RVA, find the nearest symbol at or before it.
+    // Returns true if found. outName receives the symbol name, outOffset
+    // the byte distance from the symbol's start address.
+    bool FindNameByRVA(uint32_t rva, char* outName, size_t nameSize, uint32_t* outOffset);
+
     void Close();
 }

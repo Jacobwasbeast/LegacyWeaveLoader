@@ -1,5 +1,6 @@
 #include "CrashHandler.h"
 #include "LogUtil.h"
+#include "PdbParser.h"
 #include <Windows.h>
 #include <TlHelp32.h>
 #include <cstdio>
@@ -7,6 +8,7 @@
 #include <ctime>
 
 static HMODULE s_runtimeModule = nullptr;
+static uintptr_t s_gameBase = 0;
 static volatile LONG s_handling = 0;
 
 static const char* ExceptionCodeToString(DWORD code)
@@ -102,10 +104,30 @@ static void WalkStack(CONTEXT* ctx)
             modName = slash ? slash + 1 : modPath;
         }
 
-        LogUtil::LogCrash("  [%2d] 0x%016llX  %s+0x%llX", frame, rip, modName, rip - modBase);
+        char symName[512] = {0};
+        uint32_t symOff = 0;
+        if (s_gameBase != 0 && modBase == static_cast<DWORD64>(s_gameBase))
+        {
+            uint32_t rva = static_cast<uint32_t>(rip - modBase);
+            if (PdbParser::FindNameByRVA(rva, symName, sizeof(symName), &symOff))
+            {
+                LogUtil::LogCrash("  [%2d] 0x%016llX  %s!%s+0x%X",
+                                  frame, rip, modName, symName, symOff);
+            }
+            else
+            {
+                LogUtil::LogCrash("  [%2d] 0x%016llX  %s+0x%llX",
+                                  frame, rip, modName, rip - modBase);
+            }
+        }
+        else
+        {
+            LogUtil::LogCrash("  [%2d] 0x%016llX  %s+0x%llX",
+                              frame, rip, modName, rip - modBase);
+        }
+
         frame++;
 
-        // Use RtlLookupFunctionEntry + RtlVirtualUnwind for x64 stack walking
         DWORD64 imageBase = 0;
         PRUNTIME_FUNCTION pFunc = RtlLookupFunctionEntry(rip, &imageBase, nullptr);
         if (!pFunc)
@@ -162,14 +184,24 @@ static LONG WINAPI VectoredHandler(EXCEPTION_POINTERS* ep)
         LogUtil::LogCrash("Fault:     %s of address 0x%016llX", op, er->ExceptionInformation[1]);
     }
 
-    // Module containing the faulting address
+    // Module containing the faulting address + PDB symbol resolution
     {
+        DWORD64 faultAddr = reinterpret_cast<DWORD64>(er->ExceptionAddress);
         char modPath[MAX_PATH] = {0};
         DWORD64 modBase = 0;
-        GetModuleForAddr(reinterpret_cast<DWORD64>(er->ExceptionAddress), modPath, sizeof(modPath), &modBase);
+        GetModuleForAddr(faultAddr, modPath, sizeof(modPath), &modBase);
         if (modPath[0])
             LogUtil::LogCrash("Module:    %s (base: 0x%016llX, offset: +0x%llX)",
-                              modPath, modBase, reinterpret_cast<DWORD64>(er->ExceptionAddress) - modBase);
+                              modPath, modBase, faultAddr - modBase);
+
+        char symName[512] = {0};
+        uint32_t symOff = 0;
+        if (s_gameBase != 0 && modBase == static_cast<DWORD64>(s_gameBase))
+        {
+            uint32_t rva = static_cast<uint32_t>(faultAddr - modBase);
+            if (PdbParser::FindNameByRVA(rva, symName, sizeof(symName), &symOff))
+                LogUtil::LogCrash("Symbol:    %s+0x%X", symName, symOff);
+        }
     }
 
     LogUtil::LogCrash("");
@@ -226,6 +258,12 @@ void Install(HMODULE runtimeModule)
 {
     s_runtimeModule = runtimeModule;
     AddVectoredExceptionHandler(1, VectoredHandler);
+}
+
+void SetGameBase(uintptr_t base)
+{
+    s_gameBase = base;
+    LogUtil::Log("[LegacyForge] Crash handler: game base set to 0x%016llX", (DWORD64)base);
 }
 
 } // namespace CrashHandler

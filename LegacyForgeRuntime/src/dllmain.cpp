@@ -3,6 +3,7 @@
 #include <string>
 #include "LogUtil.h"
 #include "CrashHandler.h"
+#include "PdbParser.h"
 #include "SymbolResolver.h"
 #include "HookManager.h"
 #include "DotNetHost.h"
@@ -58,6 +59,11 @@ DWORD WINAPI InitThread(LPVOID lpParam)
         return 1;
     }
     LogUtil::Log("[LegacyForge] Hooks installed");
+
+    // Build the RVA->name index before releasing the PDB.
+    // This index survives PdbParser::Close() and is used by the crash handler.
+    PdbParser::BuildAddressIndex();
+    CrashHandler::SetGameBase(reinterpret_cast<uintptr_t>(GetModuleHandleA(nullptr)));
 
     symbols.Cleanup();
 

@@ -2,6 +2,9 @@
 #include "LogUtil.h"
 #include <Windows.h>
 #include <cstring>
+#include <vector>
+#include <string>
+#include <algorithm>
 
 #include "PDB.h"
 #include "PDB_RawFile.h"
@@ -13,6 +16,14 @@
 #include "PDB_CoalescedMSFStream.h"
 #include "PDB_ModuleInfoStream.h"
 #include "PDB_ModuleSymbolStream.h"
+
+struct SymEntry
+{
+    uint32_t    rva;
+    std::string name;
+};
+
+static std::vector<SymEntry> s_addrIndex;
 
 struct MappedFile
 {
@@ -361,6 +372,121 @@ void DumpMatching(const char* substring)
     LogUtil::Log("[LegacyForge] PdbParser: found %d matching symbols", count);
 }
 
+void BuildAddressIndex()
+{
+    if (!s_open) return;
+
+    s_addrIndex.clear();
+
+    // Collect all public symbols (S_PUB32) -- these cover exported and
+    // non-static functions/data with their decorated names.
+    {
+        const PDB::ArrayView<PDB::HashRecord> records = s_publicStream->GetRecords();
+        s_addrIndex.reserve(records.GetLength());
+        for (const PDB::HashRecord& hashRecord : records)
+        {
+            const PDB::CodeView::DBI::Record* record =
+                s_publicStream->GetRecord(*s_symbolRecords, hashRecord);
+            if (record->header.kind != PDB::CodeView::DBI::SymbolRecordKind::S_PUB32)
+                continue;
+
+            uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(
+                record->data.S_PUB32.section, record->data.S_PUB32.offset);
+            if (rva != 0)
+                s_addrIndex.push_back({ rva, record->data.S_PUB32.name });
+        }
+    }
+
+    // Also pull in per-module procedure symbols (S_GPROC32/S_LPROC32) which
+    // include internal/static functions not in the public stream.
+    {
+        const PDB::ArrayView<PDB::ModuleInfoStream::Module> modules = s_moduleStream->GetModules();
+        for (const PDB::ModuleInfoStream::Module& mod : modules)
+        {
+            if (!mod.HasSymbolStream()) continue;
+            const PDB::ModuleSymbolStream modSymStream = mod.CreateSymbolStream(*s_rawFile);
+            modSymStream.ForEachSymbol([&](const PDB::CodeView::DBI::Record* record)
+            {
+                const char* name = nullptr;
+                uint16_t section = 0;
+                uint32_t offset = 0;
+
+                switch (record->header.kind)
+                {
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LPROC32:
+                    name = record->data.S_LPROC32.name;
+                    section = record->data.S_LPROC32.section;
+                    offset = record->data.S_LPROC32.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GPROC32:
+                    name = record->data.S_GPROC32.name;
+                    section = record->data.S_GPROC32.section;
+                    offset = record->data.S_GPROC32.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LPROC32_ID:
+                    name = record->data.S_LPROC32_ID.name;
+                    section = record->data.S_LPROC32_ID.section;
+                    offset = record->data.S_LPROC32_ID.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GPROC32_ID:
+                    name = record->data.S_GPROC32_ID.name;
+                    section = record->data.S_GPROC32_ID.section;
+                    offset = record->data.S_GPROC32_ID.offset;
+                    break;
+                default:
+                    return;
+                }
+
+                if (!name) return;
+                uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(section, offset);
+                if (rva != 0)
+                    s_addrIndex.push_back({ rva, name });
+            });
+        }
+    }
+
+    // Sort by RVA and deduplicate
+    std::sort(s_addrIndex.begin(), s_addrIndex.end(),
+              [](const SymEntry& a, const SymEntry& b) { return a.rva < b.rva; });
+
+    // Remove duplicates (same RVA), keeping the first entry
+    auto last = std::unique(s_addrIndex.begin(), s_addrIndex.end(),
+                            [](const SymEntry& a, const SymEntry& b) { return a.rva == b.rva; });
+    s_addrIndex.erase(last, s_addrIndex.end());
+
+    LogUtil::Log("[LegacyForge] PdbParser: built address index with %zu symbols", s_addrIndex.size());
+}
+
+bool FindNameByRVA(uint32_t rva, char* outName, size_t nameSize, uint32_t* outOffset)
+{
+    if (s_addrIndex.empty() || rva == 0)
+        return false;
+
+    // Binary search for the largest RVA <= target
+    SymEntry key = { rva, {} };
+    auto it = std::upper_bound(s_addrIndex.begin(), s_addrIndex.end(), key,
+                               [](const SymEntry& a, const SymEntry& b) { return a.rva < b.rva; });
+
+    if (it == s_addrIndex.begin())
+        return false;
+
+    --it;
+
+    // Sanity: don't report symbols more than 1MB away
+    if (rva - it->rva > 0x100000)
+        return false;
+
+    if (outName && nameSize > 0)
+    {
+        strncpy(outName, it->name.c_str(), nameSize - 1);
+        outName[nameSize - 1] = '\0';
+    }
+    if (outOffset)
+        *outOffset = rva - it->rva;
+
+    return true;
+}
+
 void Close()
 {
     delete s_moduleStream;   s_moduleStream  = nullptr;
@@ -372,6 +498,8 @@ void Close()
     delete s_rawFile;        s_rawFile       = nullptr;
     CloseMappedFile(s_mapped);
     s_open = false;
+    // Note: s_addrIndex intentionally NOT cleared -- it survives Close()
+    // so the crash handler can resolve addresses after PDB is released.
 }
 
 } // namespace PdbParser
