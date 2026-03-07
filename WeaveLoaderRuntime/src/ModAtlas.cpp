@@ -1,6 +1,7 @@
 #include "ModAtlas.h"
 #include "LogUtil.h"
 #include <Windows.h>
+#include <MinHook.h>
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -281,13 +282,102 @@ namespace ModAtlas
 
     static std::unordered_map<std::wstring, void*> s_modIcons;
     static RegisterIcon_fn s_originalRegisterIcon = nullptr;
-    static std::string s_gameResPath;
-    static std::string s_backupTerrainPath;
-    static std::string s_backupItemsPath;
 
     // Per-atlas-type textureMap pointers, saved during CreateModIcons for FixupModIcons.
     static void* s_terrainTextureMap = nullptr;
     static void* s_itemsTextureMap = nullptr;
+
+    // CreateFileW hook: redirect game file opens to merged atlases
+    static std::wstring s_mergedTerrainW;
+    static std::wstring s_mergedItemsW;
+    static std::wstring s_vanillaTerrainW;
+    static std::wstring s_vanillaItemsW;
+
+    typedef HANDLE (WINAPI *CreateFileW_fn)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+    static CreateFileW_fn s_originalCreateFileW = nullptr;
+
+    static bool EndsWith(const wchar_t* path, const wchar_t* suffix)
+    {
+        size_t pathLen = wcslen(path);
+        size_t suffLen = wcslen(suffix);
+        if (suffLen > pathLen) return false;
+        return _wcsicmp(path + pathLen - suffLen, suffix) == 0;
+    }
+
+    static HANDLE WINAPI Hooked_CreateFileW(
+        LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+        LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+        DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
+    {
+        if (lpFileName && s_hasModTextures)
+        {
+            if (!s_mergedTerrainW.empty() && EndsWith(lpFileName, L"\\terrain.png"))
+            {
+                LogUtil::Log("[WeaveLoader] CreateFileW: redirecting terrain.png to merged atlas");
+                return s_originalCreateFileW(s_mergedTerrainW.c_str(), dwDesiredAccess, dwShareMode,
+                    lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+            }
+            if (!s_mergedItemsW.empty() && EndsWith(lpFileName, L"\\items.png"))
+            {
+                LogUtil::Log("[WeaveLoader] CreateFileW: redirecting items.png to merged atlas");
+                return s_originalCreateFileW(s_mergedItemsW.c_str(), dwDesiredAccess, dwShareMode,
+                    lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+            }
+        }
+        return s_originalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode,
+            lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+    }
+
+    bool InstallCreateFileHook(const std::string& gameResPath)
+    {
+        if (!s_hasModTextures) return false;
+
+        std::string mergedTerrain = GetMergedTerrainPath();
+        std::string mergedItems = GetMergedItemsPath();
+
+        if (!mergedTerrain.empty())
+            s_mergedTerrainW = std::wstring(mergedTerrain.begin(), mergedTerrain.end());
+        if (!mergedItems.empty())
+            s_mergedItemsW = std::wstring(mergedItems.begin(), mergedItems.end());
+
+        void* pCreateFileW = reinterpret_cast<void*>(
+            GetProcAddress(GetModuleHandleA("kernel32.dll"), "CreateFileW"));
+        if (!pCreateFileW)
+        {
+            LogUtil::Log("[WeaveLoader] ModAtlas: could not find CreateFileW");
+            return false;
+        }
+
+        if (MH_CreateHook(pCreateFileW, reinterpret_cast<void*>(&Hooked_CreateFileW),
+                          reinterpret_cast<void**>(&s_originalCreateFileW)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] ModAtlas: failed to hook CreateFileW");
+            return false;
+        }
+        if (MH_EnableHook(pCreateFileW) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] ModAtlas: failed to enable CreateFileW hook");
+            return false;
+        }
+
+        LogUtil::Log("[WeaveLoader] ModAtlas: CreateFileW hook installed (terrain=%s, items=%s)",
+                     mergedTerrain.c_str(), mergedItems.c_str());
+        return true;
+    }
+
+    void RemoveCreateFileHook()
+    {
+        void* pCreateFileW = reinterpret_cast<void*>(
+            GetProcAddress(GetModuleHandleA("kernel32.dll"), "CreateFileW"));
+        if (pCreateFileW)
+        {
+            MH_DisableHook(pCreateFileW);
+            MH_RemoveHook(pCreateFileW);
+        }
+        s_mergedTerrainW.clear();
+        s_mergedItemsW.clear();
+        LogUtil::Log("[WeaveLoader] ModAtlas: CreateFileW hook removed");
+    }
 
     void SetInjectSymbols(void* simpleIconCtor, void* operatorNew)
     {
@@ -298,37 +388,6 @@ namespace ModAtlas
     void SetRegisterIconFn(RegisterIcon_fn fn)
     {
         s_originalRegisterIcon = fn;
-    }
-
-    void InstallAtlasFiles(const std::string& gameResPath)
-    {
-        if (!s_hasModTextures) return;
-        s_gameResPath = gameResPath;
-
-        std::string vanillaTerrain = gameResPath + "\\terrain.png";
-        std::string vanillaItems   = gameResPath + "\\items.png";
-        std::string mergedTerrain  = GetMergedTerrainPath();
-        std::string mergedItems    = GetMergedItemsPath();
-
-        if (!mergedTerrain.empty() && !s_blockEntries.empty())
-        {
-            s_backupTerrainPath = vanillaTerrain + ".weaveloader_backup";
-            CopyFileA(vanillaTerrain.c_str(), s_backupTerrainPath.c_str(), FALSE);
-            if (CopyFileA(mergedTerrain.c_str(), vanillaTerrain.c_str(), FALSE))
-                LogUtil::Log("[WeaveLoader] ModAtlas: installed merged terrain.png over game file");
-            else
-                LogUtil::Log("[WeaveLoader] ModAtlas: WARNING - failed to copy merged terrain.png (err=%lu)", GetLastError());
-        }
-
-        if (!mergedItems.empty() && !s_itemEntries.empty())
-        {
-            s_backupItemsPath = vanillaItems + ".weaveloader_backup";
-            CopyFileA(vanillaItems.c_str(), s_backupItemsPath.c_str(), FALSE);
-            if (CopyFileA(mergedItems.c_str(), vanillaItems.c_str(), FALSE))
-                LogUtil::Log("[WeaveLoader] ModAtlas: installed merged items.png over game file");
-            else
-                LogUtil::Log("[WeaveLoader] ModAtlas: WARNING - failed to copy merged items.png (err=%lu)", GetLastError());
-        }
     }
 
     void CreateModIcons(void* textureMap)
@@ -421,22 +480,6 @@ namespace ModAtlas
 
         fixForAtlas(s_terrainTextureMap, 0, L"stone");
         fixForAtlas(s_itemsTextureMap,   1, L"diamond");
-
-        // Restore backed-up vanilla atlas files
-        if (!s_backupTerrainPath.empty())
-        {
-            std::string vanillaTerrain = s_gameResPath + "\\terrain.png";
-            if (MoveFileExA(s_backupTerrainPath.c_str(), vanillaTerrain.c_str(), MOVEFILE_REPLACE_EXISTING))
-                LogUtil::Log("[WeaveLoader] ModAtlas: restored original terrain.png");
-            s_backupTerrainPath.clear();
-        }
-        if (!s_backupItemsPath.empty())
-        {
-            std::string vanillaItems = s_gameResPath + "\\items.png";
-            if (MoveFileExA(s_backupItemsPath.c_str(), vanillaItems.c_str(), MOVEFILE_REPLACE_EXISTING))
-                LogUtil::Log("[WeaveLoader] ModAtlas: restored original items.png");
-            s_backupItemsPath.clear();
-        }
     }
 
     void* LookupModIcon(const std::wstring& name)

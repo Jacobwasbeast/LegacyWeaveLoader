@@ -157,11 +157,14 @@ namespace GameHooks
         ModAtlas::BuildAtlases(base + "mods", gameResPath);
     atlas_done:
 
-        // Overwrite the game's atlas PNGs with our merged versions BEFORE init
-        // loads them. The originals are backed up and restored after init.
-        ModAtlas::InstallAtlasFiles(gameResPath);
+        // Redirect terrain.png/items.png file opens to our merged atlases
+        // so the game loads mod textures without modifying vanilla files.
+        ModAtlas::InstallCreateFileHook(gameResPath);
 
         Original_MinecraftInit(thisPtr);
+
+        // Textures are loaded into GPU memory now; remove the redirect.
+        ModAtlas::RemoveCreateFileHook();
 
         // After init, vanilla icons have their source-image pointer (field_0x48)
         // fully populated. Copy it to our mod icons so getSourceHeight() works.

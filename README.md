@@ -9,7 +9,7 @@ A runtime mod loader for Minecraft Legacy Edition (Xbox 360 / PS3 / Windows 64-b
 - **Function hooking** -- MinHook detours on game lifecycle functions (init, tick, static constructors, rendering)
 - **Full .NET hosting** -- .NET 8 CoreCLR is loaded inside the game process via hostfxr; mods are standard C# class libraries
 - **Block and item registration** -- Create real game objects (Tile, TileItem, Item) by calling the game's own constructors through resolved PDB symbols
-- **Dynamic texture atlas merging** -- Mod textures are stitched into the game's `terrain.png` and `items.png` atlases at runtime using empty cells
+- **Dynamic texture atlas merging** -- Mod textures are merged into copies of the game's atlases at runtime using empty cells; vanilla game files are never touched
 - **Creative inventory injection** -- Mod items appear in the correct creative tabs with proper pagination
 - **Localized display names** -- Mod strings are injected directly into the game's `StringTable` vector, bypassing inlined `GetString` calls
 - **Crash reporting** -- Vectored exception handler produces detailed crash logs with register dumps, symbolicated stack traces, and loaded module lists
@@ -342,8 +342,8 @@ The runtime opens the game's PDB file and parses it using [raw_pdb](https://gith
 2. The vanilla `terrain.png` (16x32 grid) and `items.png` (16x16 grid) are loaded via stb_image
 3. Empty cells are identified by checking for fully transparent pixels
 4. Mod textures are placed into empty cells
-5. The merged atlas is written to a temp directory and swapped in before `Minecraft::init`
-6. After the game loads textures, the original files are restored from backup
+5. The merged atlas is written to `mods/ModLoader/generated/` -- **vanilla game files are never modified**
+6. A `CreateFileW` hook temporarily redirects the game's file opens to the merged atlases during init, then is removed once textures are loaded into GPU memory
 7. `SimpleIcon` objects are created for each mod texture with correct UV coordinates
 
 ### String Table Injection

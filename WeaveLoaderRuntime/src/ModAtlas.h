@@ -6,7 +6,9 @@
 
 /// <summary>
 /// Builds merged terrain.png and items.png atlases from mod assets.
-/// Scans mods/*/assets/blocks/*.png and items/*.png, stitches into vanilla atlases.
+/// Scans mods/*/assets/blocks/*.png and items/*.png, stitches into copies of the
+/// vanilla atlases stored in mods/ModLoader/generated/. A CreateFileW hook redirects
+/// the game's file opens to the merged copies so vanilla files are never modified.
 /// </summary>
 namespace ModAtlas
 {
@@ -41,9 +43,12 @@ namespace ModAtlas
     /// Set the original registerIcon function for vanilla icon lookups
     void SetRegisterIconFn(RegisterIcon_fn fn);
 
-    /// Copy merged atlas PNGs over the game's vanilla atlas files.
-    /// Call before Minecraft::init so the game loads our textures.
-    void InstallAtlasFiles(const std::string& gameResPath);
+    /// Install a CreateFileW hook that redirects terrain.png/items.png reads to
+    /// the merged atlases. Call after BuildAtlases, before Minecraft::init.
+    bool InstallCreateFileHook(const std::string& gameResPath);
+
+    /// Remove the CreateFileW hook after init has loaded textures into memory.
+    void RemoveCreateFileHook();
 
     /// Create SimpleIcon objects for our mod textures after loadUVs runs.
     /// Call from loadUVs hook after original returns. atlasType is read from textureMap.
