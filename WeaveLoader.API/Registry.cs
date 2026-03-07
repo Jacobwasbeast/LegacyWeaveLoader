@@ -24,6 +24,9 @@ public static class Registry
     {
         public static RegisteredItem Register(Identifier id, ItemProperties properties)
             => ItemRegistry.Register(id, properties);
+
+        public static RegisteredItem Register(Identifier id, WeaveLoader.API.Item.Item item, ItemProperties properties)
+            => ItemRegistry.Register(id, item, properties);
     }
 
     /// <summary>Entity registration. Call Register() with a namespaced ID and EntityDefinition.</summary>

@@ -106,9 +106,48 @@ int native_register_item(
         ModStrings::Register(descId, wName.c_str());
     }
 
-    if (!GameObjectFactory::CreateItem(id, maxStackSize, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+    if (!GameObjectFactory::CreateItem(id, maxStackSize, maxDamage,
+                                       wIcon.empty() ? nullptr : wIcon.c_str(), descId))
     {
         LogUtil::Log("[WeaveLoader] Warning: failed to create game Item for '%s' id=%d", namespacedId, id);
+    }
+
+    return id;
+}
+
+int native_register_pickaxe_item(
+    const char* namespacedId,
+    int tier,
+    int maxDamage,
+    const char* iconName,
+    const char* displayName)
+{
+    if (!namespacedId) return -1;
+
+    int id = IdRegistry::Instance().Register(IdRegistry::Type::Item, namespacedId);
+    if (id < 0)
+    {
+        LogUtil::Log("[WeaveLoader] Failed to allocate pickaxe item ID for '%s'", namespacedId);
+        return -1;
+    }
+
+    LogUtil::Log("[WeaveLoader] Registered pickaxe item '%s' -> ID %d (tier=%d, durability=%d)",
+                 namespacedId, id, tier, maxDamage);
+
+    std::wstring wIcon = Utf8ToWide(iconName);
+
+    int descId = -1;
+    if (displayName && displayName[0])
+    {
+        descId = ModStrings::AllocateId();
+        std::wstring wName = Utf8ToWide(displayName);
+        ModStrings::Register(descId, wName.c_str());
+    }
+
+    if (!GameObjectFactory::CreatePickaxeItem(id, tier, maxDamage,
+                                              wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+    {
+        LogUtil::Log("[WeaveLoader] Warning: failed to create native PickaxeItem for '%s' id=%d", namespacedId, id);
     }
 
     return id;

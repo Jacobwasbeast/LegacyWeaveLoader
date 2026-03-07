@@ -22,6 +22,8 @@ typedef void (__fastcall *TileItemCtor_fn)(void* thisPtr, int id);
 
 // Item::Item(int id) — protected ctor
 typedef void (__fastcall *ItemCtor_fn)(void* thisPtr, int id);
+// PickaxeItem::PickaxeItem(int id, const Item::Tier* tier)
+typedef void (__fastcall *PickaxeCtor_fn)(void* thisPtr, int id, const void* tier);
 // Item* Item::setIconName(const std::wstring&)
 typedef void* (__fastcall *ItemSetIconName_fn)(void* thisPtr, const std::wstring& name);
 // Item::getDescriptionId(int) — used to extract the descriptionId field offset
@@ -37,6 +39,7 @@ static TileSetDescriptionId_fn fnTileSetDescriptionId = nullptr;
 static TileItemCtor_fn    fnTileItemCtor   = nullptr;
 
 static ItemCtor_fn        fnItemCtor       = nullptr;
+static PickaxeCtor_fn     fnPickaxeCtor    = nullptr;
 static ItemSetIconName_fn fnItemSetIconName= nullptr;
 static int s_itemDescIdOffset = -1; // offset of descriptionId field in Item, extracted from getDescriptionId
 
@@ -44,6 +47,7 @@ static int s_itemDescIdOffset = -1; // offset of descriptionId field in Item, ex
 // (they're NULL at resolve time because staticCtor hasn't run yet).
 static void** s_materialAddrs[16] = {};
 static void** s_soundAddrs[10] = {};
+static void** s_tierAddrs[5] = {};
 
 static const int TILE_ALLOC_SIZE = 1024;
 static const int ITEM_ALLOC_SIZE = 1024;
@@ -61,6 +65,12 @@ static void* GetSound(int idx)
 {
     if (idx < 0 || idx >= 10 || !s_soundAddrs[idx]) return nullptr;
     return *s_soundAddrs[idx];
+}
+
+static const void* GetTier(int idx)
+{
+    if (idx < 0 || idx >= 5 || !s_tierAddrs[idx]) return nullptr;
+    return *s_tierAddrs[idx];
 }
 
 namespace GameObjectFactory
@@ -90,6 +100,7 @@ bool ResolveSymbols(SymbolResolver& resolver)
 
     // Item constructor — protected (IEAA not QEAA)
     fnItemCtor = (ItemCtor_fn)resolver.Resolve("??0Item@@IEAA@H@Z");
+    fnPickaxeCtor = (PickaxeCtor_fn)resolver.Resolve("??0PickaxeItem@@QEAA@HPEBVTier@Item@@@Z");
 
     // Item::setIconName
     fnItemSetIconName = (ItemSetIconName_fn)resolver.Resolve(
@@ -159,6 +170,13 @@ bool ResolveSymbols(SymbolResolver& resolver)
     resolveSound(8, "?SOUND_SAND@Tile@@2PEAVSoundType@1@EA");
     resolveSound(9, "?SOUND_SNOW@Tile@@2PEAVSoundType@1@EA");
 
+    // Resolve Item::Tier static pointer ADDRESSES
+    s_tierAddrs[0] = (void**)resolver.Resolve("?WOOD@Tier@Item@@2PEBV12@EB");
+    s_tierAddrs[1] = (void**)resolver.Resolve("?STONE@Tier@Item@@2PEBV12@EB");
+    s_tierAddrs[2] = (void**)resolver.Resolve("?IRON@Tier@Item@@2PEBV12@EB");
+    s_tierAddrs[3] = (void**)resolver.Resolve("?DIAMOND@Tier@Item@@2PEBV12@EB");
+    s_tierAddrs[4] = (void**)resolver.Resolve("?GOLD@Tier@Item@@2PEBV12@EB");
+
     auto logSym = [](const char* name, void* ptr) {
         if (ptr) LogUtil::Log("[WeaveLoader] GOF %-20s @ %p", name, ptr);
         else     LogUtil::Log("[WeaveLoader] GOF MISSING: %s", name);
@@ -171,6 +189,7 @@ bool ResolveSymbols(SymbolResolver& resolver)
     logSym("Tile::setIconName",  (void*)fnTileSetIconName);
     logSym("TileItem::TileItem", (void*)fnTileItemCtor);
     logSym("Item::Item",         (void*)fnItemCtor);
+    logSym("PickaxeItem::PickaxeItem", (void*)fnPickaxeCtor);
     logSym("Item::setIconName",  (void*)fnItemSetIconName);
     logSym("Material::stone addr", (void*)s_materialAddrs[1]);
     logSym("SOUND_STONE addr",     (void*)s_soundAddrs[1]);
@@ -258,7 +277,7 @@ bool CreateTile(int tileId, int materialType, float hardness, float resistance,
     return true;
 }
 
-bool CreateItem(int itemId, int maxStackSize, const wchar_t* iconName, int descriptionId)
+bool CreateItem(int itemId, int maxStackSize, int maxDamage, const wchar_t* iconName, int descriptionId)
 {
     if (!s_resolved || !fnItemCtor)
     {
@@ -271,6 +290,17 @@ bool CreateItem(int itemId, int maxStackSize, const wchar_t* iconName, int descr
     void* item = ::operator new(ITEM_ALLOC_SIZE);
     memset(item, 0, ITEM_ALLOC_SIZE);
     fnItemCtor(item, ctorParam);
+
+    // Verified from Item::Item disassembly:
+    // +0x24 = maxStackSize, +0x28 = maxDamage.
+    if (maxStackSize > 0)
+    {
+        *reinterpret_cast<int*>(static_cast<char*>(item) + 0x24) = maxStackSize;
+    }
+    if (maxDamage > 0)
+    {
+        *reinterpret_cast<int*>(static_cast<char*>(item) + 0x28) = maxDamage;
+    }
 
     // The game calls __debugbreak() if registerIcons is called with an empty
     // m_textureName, so always set a non-empty icon name.
@@ -286,9 +316,71 @@ bool CreateItem(int itemId, int maxStackSize, const wchar_t* iconName, int descr
             static_cast<unsigned int>(descriptionId);
     }
 
-    LogUtil::Log("[WeaveLoader] Created Item id=%d (ctorParam=%d, icon=%ls, descId=%d)",
-                 itemId, ctorParam, iconName ? iconName : L"<none>", descriptionId);
+    LogUtil::Log("[WeaveLoader] Created Item id=%d (ctorParam=%d, stack=%d, damage=%d, icon=%ls, descId=%d)",
+                 itemId, ctorParam, maxStackSize, maxDamage,
+                 iconName ? iconName : L"<none>", descriptionId);
 
+    return true;
+}
+
+bool CreatePickaxeItem(int itemId, int tier, int maxDamage, const wchar_t* iconName, int descriptionId)
+{
+    if (!s_resolved || !fnPickaxeCtor)
+    {
+        LogUtil::Log("[WeaveLoader] CreatePickaxeItem: symbols not resolved");
+        return false;
+    }
+
+    const void* tierPtr = GetTier(tier);
+    if (!tierPtr)
+    {
+        LogUtil::Log("[WeaveLoader] CreatePickaxeItem: invalid tier %d", tier);
+        return false;
+    }
+
+    int ctorParam = itemId - 256;
+    void* item = ::operator new(ITEM_ALLOC_SIZE);
+    memset(item, 0, ITEM_ALLOC_SIZE);
+    fnPickaxeCtor(item, ctorParam, tierPtr);
+
+    // Ensure pickaxe category/material for crafting menus:
+    // baseType=pickaxe(3), material depends on tier.
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x38) = 3;
+    int material = 5; // diamond default
+    switch (tier)
+    {
+        case 0: material = 1; break; // wood
+        case 1: material = 2; break; // stone
+        case 2: material = 3; break; // iron
+        case 3: material = 5; break; // diamond
+        case 4: material = 4; break; // gold
+        default: break;
+    }
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x3C) = material;
+
+    // Tools should always stack to 1.
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x24) = 1;
+
+    // Optionally override tier durability.
+    if (maxDamage > 0)
+    {
+        *reinterpret_cast<int*>(static_cast<char*>(item) + 0x28) = maxDamage;
+    }
+
+    if (fnItemSetIconName)
+    {
+        std::wstring name = (iconName && iconName[0]) ? iconName : L"MISSING_ICON_ITEM";
+        fnItemSetIconName(item, name);
+    }
+
+    if (s_itemDescIdOffset > 0 && descriptionId >= 0)
+    {
+        *reinterpret_cast<unsigned int*>(static_cast<char*>(item) + s_itemDescIdOffset) =
+            static_cast<unsigned int>(descriptionId);
+    }
+
+    LogUtil::Log("[WeaveLoader] Created PickaxeItem id=%d (ctorParam=%d, tier=%d, damage=%d, icon=%ls, descId=%d)",
+                 itemId, ctorParam, tier, maxDamage, iconName ? iconName : L"<none>", descriptionId);
     return true;
 }
 

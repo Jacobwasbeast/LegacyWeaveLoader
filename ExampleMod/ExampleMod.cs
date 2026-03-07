@@ -11,6 +11,16 @@ public class ExampleMod : IMod
 {
     public static RegisteredBlock? RubyOre;
     public static RegisteredItem? Ruby;
+    public static RegisteredItem? RubyPickaxeItem;
+
+    private sealed class RubyPickaxe : PickaxeItem
+    {
+        public override MineBlockResult OnMineBlock(MineBlockContext context)
+        {
+            Logger.Info($"RubyPickaxe mined tile={context.TileId} at ({context.X}, {context.Y}, {context.Z})");
+            return base.OnMineBlock(context);
+        }
+    }
 
     public void OnInitialize()
     {
@@ -30,6 +40,14 @@ public class ExampleMod : IMod
                 .Icon("examplemod:ruby")  // From assets/items/ruby.png
                 .Name("Ruby")
                 .InCreativeTab(CreativeTab.Materials));
+
+        RubyPickaxeItem = Registry.Item.Register("examplemod:ruby_pickaxe", new RubyPickaxe(),
+            new ItemProperties()
+                .MaxStackSize(1)
+                .MaxDamage(512)
+                .Icon("examplemod:ruby_pickaxe")  // From assets/items/ruby_pickaxe.png
+                .Name("Ruby Pickaxe")
+                .InCreativeTab(CreativeTab.ToolsAndWeapons));
 
         Registry.Recipe.AddFurnace("examplemod:ruby_ore", "examplemod:ruby", 1.0f);
 

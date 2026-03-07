@@ -29,8 +29,21 @@ public static class Logger
     public static void Log(string message, LogLevel level = LogLevel.Info)
     {
         if (LogHandler != null)
+        {
             LogHandler(message, level);
-        else
-            Console.WriteLine($"[WeaveLoader/{level}] {message}");
+            return;
+        }
+
+        string formatted = $"[WeaveLoader/{level}] {message}";
+        try
+        {
+            // Fallback path: write directly to native runtime logging so mod logs
+            // still appear even if the managed log handler was not initialized.
+            NativeInterop.native_log(formatted, (int)level);
+        }
+        catch
+        {
+            Console.WriteLine(formatted);
+        }
     }
 }

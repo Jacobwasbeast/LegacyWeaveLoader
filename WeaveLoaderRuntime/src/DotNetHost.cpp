@@ -22,6 +22,7 @@ static managed_entry_fn fn_Init = nullptr;
 static managed_entry_fn fn_PostInit = nullptr;
 static managed_entry_fn fn_Tick = nullptr;
 static managed_entry_fn fn_Shutdown = nullptr;
+static managed_entry_fn fn_ItemMineBlock = nullptr;
 
 static bool LoadHostfxr()
 {
@@ -177,6 +178,7 @@ bool DotNetHost::Initialize()
     ok &= resolve(L"PostInit", &fn_PostInit);
     ok &= resolve(L"Tick", &fn_Tick);
     ok &= resolve(L"Shutdown", &fn_Shutdown);
+    ok &= resolve(L"OnItemMineBlock", &fn_ItemMineBlock);
 
     if (!ok)
     {
@@ -225,6 +227,13 @@ void DotNetHost::CallTick()
 void DotNetHost::CallShutdown()
 {
     if (fn_Shutdown) fn_Shutdown(nullptr, 0);
+}
+
+int DotNetHost::CallItemMineBlock(const void* args, int sizeBytes)
+{
+    if (!fn_ItemMineBlock || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemMineBlock(const_cast<void*>(args), sizeBytes);
 }
 
 void DotNetHost::Cleanup()

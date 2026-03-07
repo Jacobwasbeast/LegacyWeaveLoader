@@ -15,4 +15,5 @@ namespace DotNetHost
     void CallPostInit();
     void CallTick();
     void CallShutdown();
+    int  CallItemMineBlock(const void* args, int sizeBytes);
 }

@@ -18,5 +18,12 @@ namespace GameObjectFactory
     // Create an Item game object. itemId is the FINAL id (256 + constructor param).
     // The Item is registered in Item::items[itemId].
     // descriptionId: if >= 0, call setDescriptionId on the Item for localization.
-    bool CreateItem(int itemId, int maxStackSize, const wchar_t* iconName, int descriptionId = -1);
+    bool CreateItem(int itemId, int maxStackSize, int maxDamage,
+                    const wchar_t* iconName, int descriptionId = -1);
+
+    // Create a native PickaxeItem game object.
+    // tier: 0=wood, 1=stone, 2=iron, 3=diamond, 4=gold.
+    // maxDamage: if > 0, overrides the tier default durability.
+    bool CreatePickaxeItem(int itemId, int tier, int maxDamage,
+                           const wchar_t* iconName, int descriptionId = -1);
 }

@@ -18,6 +18,9 @@ static const char* SYM_LOAD_UVS = "?loadUVs@PreStitchedTextureMap@@AEAAXXZ";
 static const char* SYM_SIMPLE_ICON_CTOR = "??0SimpleIcon@@QEAA@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@0MMMM@Z";
 static const char* SYM_OPERATOR_NEW = "??2@YAPEAX_K@Z";
 static const char* SYM_REGISTER_ICON = "?registerIcon@PreStitchedTextureMap@@UEAAPEAVIcon@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
+static const char* SYM_ITEMINSTANCE_MINEBLOCK = "?mineBlock@ItemInstance@@QEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
+static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
+static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
 
 bool SymbolResolver::Initialize()
 {
@@ -88,6 +91,9 @@ bool SymbolResolver::ResolveGameFunctions()
     pSimpleIconCtor      = Resolve(SYM_SIMPLE_ICON_CTOR);
     pOperatorNew         = Resolve(SYM_OPERATOR_NEW);
     pRegisterIcon        = Resolve(SYM_REGISTER_ICON);
+    pItemInstanceMineBlock = Resolve(SYM_ITEMINSTANCE_MINEBLOCK);
+    pItemMineBlock = Resolve(SYM_ITEM_MINEBLOCK);
+    pDiggerItemMineBlock = Resolve(SYM_DIGGERITEM_MINEBLOCK);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140d.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandle(nullptr), SYM_OPERATOR_NEW);
@@ -114,6 +120,9 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("SimpleIcon::SimpleIcon", pSimpleIconCtor);
     logSym("operator new", pOperatorNew);
     logSym("registerIcon", pRegisterIcon);
+    logSym("ItemInstance::mineBlock", pItemInstanceMineBlock);
+    logSym("Item::mineBlock", pItemMineBlock);
+    logSym("DiggerItem::mineBlock", pDiggerItemMineBlock);
 
     bool ok = pRunStaticCtors && pMinecraftTick && pMinecraftInit;
     if (ok)

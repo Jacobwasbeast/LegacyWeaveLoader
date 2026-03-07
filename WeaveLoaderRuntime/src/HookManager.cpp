@@ -54,6 +54,48 @@ bool HookManager::Install(const SymbolResolver& symbols)
         LogUtil::Log("[WeaveLoader] Hooked Minecraft::init");
     }
 
+    if (symbols.pItemInstanceMineBlock)
+    {
+        if (MH_CreateHook(symbols.pItemInstanceMineBlock,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceMineBlock),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceMineBlock)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::mineBlock");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::mineBlock (managed item callbacks)");
+        }
+    }
+
+    if (symbols.pItemMineBlock)
+    {
+        if (MH_CreateHook(symbols.pItemMineBlock,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemMineBlock),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemMineBlock)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Item::mineBlock");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Item::mineBlock (managed item callbacks)");
+        }
+    }
+
+    if (symbols.pDiggerItemMineBlock)
+    {
+        if (MH_CreateHook(symbols.pDiggerItemMineBlock,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_DiggerItemMineBlock),
+                          reinterpret_cast<void**>(&GameHooks::Original_DiggerItemMineBlock)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook DiggerItem::mineBlock");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked DiggerItem::mineBlock (managed item callbacks)");
+        }
+    }
+
     if (symbols.pExitGame)
     {
         if (MH_CreateHook(symbols.pExitGame,

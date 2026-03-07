@@ -23,6 +23,9 @@ public:
     void* pSimpleIconCtor = nullptr;       // SimpleIcon::SimpleIcon(wstring,wstring,float*4)
     void* pOperatorNew = nullptr;          // global operator new(size_t) - for texture injection
     void* pRegisterIcon = nullptr;         // PreStitchedTextureMap::registerIcon(const wstring&)
+    void* pItemInstanceMineBlock = nullptr; // ItemInstance::mineBlock(Level*,int,int,int,int,shared_ptr<Player>)
+    void* pItemMineBlock = nullptr;        // Item::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
+    void* pDiggerItemMineBlock = nullptr;  // DiggerItem::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
 
 private:
     uintptr_t m_moduleBase = 0;

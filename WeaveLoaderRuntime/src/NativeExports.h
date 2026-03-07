@@ -23,6 +23,13 @@ extern "C"
         const char* iconName,
         const char* displayName);
 
+    __declspec(dllexport) int native_register_pickaxe_item(
+        const char* namespacedId,
+        int tier,
+        int maxDamage,
+        const char* iconName,
+        const char* displayName);
+
     __declspec(dllexport) int native_allocate_description_id();
     __declspec(dllexport) void native_register_string(int descriptionId, const char* displayName);
 

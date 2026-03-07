@@ -24,6 +24,86 @@ namespace GameHooks
     GetResourceAsStream_fn Original_GetResourceAsStream = nullptr;
     LoadUVs_fn             Original_LoadUVs = nullptr;
     RegisterIcon_fn        Original_RegisterIcon = nullptr;
+    ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock = nullptr;
+    ItemMineBlock_fn       Original_ItemMineBlock = nullptr;
+    ItemMineBlock_fn       Original_DiggerItemMineBlock = nullptr;
+    static int s_itemMineBlockHookCalls = 0;
+
+    struct MineBlockNativeArgs
+    {
+        int itemId;
+        int tileId;
+        int x;
+        int y;
+        int z;
+    };
+
+    static bool TryReadItemId(void* itemInstancePtr, int& outItemId)
+    {
+        if (!itemInstancePtr)
+            return false;
+
+        // ItemInstance inherits enable_shared_from_this, so id is not guaranteed at +0x10.
+        // Probe known layouts observed across builds.
+        static const int kCandidateOffsets[] = { 0x20, 0x18, 0x10, 0x28 };
+        for (int off : kCandidateOffsets)
+        {
+            __try
+            {
+                int id = *reinterpret_cast<int*>(static_cast<char*>(itemInstancePtr) + off);
+                if (id > 0 && id < 32000)
+                {
+                    outItemId = id;
+                    return true;
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+
+        return false;
+    }
+
+    static int TryDispatchMineBlockFromItemInstancePtr(void* itemInstancePtr, int tile, int x, int y, int z, const char* sourceTag)
+    {
+        if (!itemInstancePtr)
+            return 0;
+
+        int itemId = 0;
+        if (!TryReadItemId(itemInstancePtr, itemId))
+            return 0;
+
+        MineBlockNativeArgs args{ itemId, tile, x, y, z };
+        int action = DotNetHost::CallItemMineBlock(&args, sizeof(args));
+        return action;
+    }
+
+    static void* DecodeItemInstancePtrFromSharedArg(void* sharedArg)
+    {
+        if (!sharedArg)
+            return nullptr;
+
+        // Candidate A: shared_ptr<ItemInstance> object where first field is raw ItemInstance*.
+        __try
+        {
+            void* p = *reinterpret_cast<void**>(sharedArg);
+            if (p)
+            {
+                int id = 0;
+                if (TryReadItemId(p, id)) return p;
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        // Candidate B: argument itself is already ItemInstance*.
+        __try
+        {
+            int id = 0;
+            if (TryReadItemId(sharedArg, id)) return sharedArg;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        return nullptr;
+    }
 
     void __fastcall Hooked_LoadUVs(void* thisPtr)
     {
@@ -54,6 +134,48 @@ namespace GameHooks
                          s_registerIconCallCount, name.c_str(), result);
         }
         return result;
+    }
+
+    void __fastcall Hooked_ItemInstanceMineBlock(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr)
+    {
+        s_itemMineBlockHookCalls++;
+        int action = TryDispatchMineBlockFromItemInstancePtr(thisPtr, tile, x, y, z, "ItemInstance::mineBlock");
+        if (action == 2)
+        {
+            // Managed item explicitly canceled vanilla mineBlock behavior.
+            return;
+        }
+
+        if (Original_ItemInstanceMineBlock)
+            Original_ItemInstanceMineBlock(thisPtr, level, tile, x, y, z, ownerSharedPtr);
+    }
+
+    bool __fastcall Hooked_ItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr)
+    {
+        s_itemMineBlockHookCalls++;
+
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        int action = TryDispatchMineBlockFromItemInstancePtr(itemInstancePtr, tile, x, y, z, "Item::mineBlock");
+        if (action == 2)
+            return true;
+
+        if (Original_ItemMineBlock)
+            return Original_ItemMineBlock(thisPtr, itemInstanceSharedPtr, level, tile, x, y, z, ownerSharedPtr);
+        return false;
+    }
+
+    bool __fastcall Hooked_DiggerItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr)
+    {
+        s_itemMineBlockHookCalls++;
+
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        int action = TryDispatchMineBlockFromItemInstancePtr(itemInstancePtr, tile, x, y, z, "DiggerItem::mineBlock");
+        if (action == 2)
+            return true;
+
+        if (Original_DiggerItemMineBlock)
+            return Original_DiggerItemMineBlock(thisPtr, itemInstanceSharedPtr, level, tile, x, y, z, ownerSharedPtr);
+        return false;
     }
 
     void* Hooked_GetResourceAsStream(const void* fileName)

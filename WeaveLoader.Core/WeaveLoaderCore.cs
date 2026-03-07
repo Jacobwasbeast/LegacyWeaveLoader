@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using WeaveLoader.API;
+using WeaveLoader.API.Item;
 
 namespace WeaveLoader.Core;
 
@@ -91,5 +92,18 @@ public static class WeaveLoaderCore
         _modManager?.Shutdown();
         Logger.Info("WeaveLoader shut down.");
         return 0;
+    }
+
+    public static int OnItemMineBlock(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleMineBlock(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemMineBlock EXCEPTION: {ex}");
+            return 0;
+        }
     }
 }
