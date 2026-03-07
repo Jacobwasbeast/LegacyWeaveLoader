@@ -18,9 +18,20 @@ static const char* SYM_LOAD_UVS = "?loadUVs@PreStitchedTextureMap@@AEAAXXZ";
 static const char* SYM_SIMPLE_ICON_CTOR = "??0SimpleIcon@@QEAA@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@0MMMM@Z";
 static const char* SYM_OPERATOR_NEW = "??2@YAPEAX_K@Z";
 static const char* SYM_REGISTER_ICON = "?registerIcon@PreStitchedTextureMap@@UEAAPEAVIcon@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
+static const char* SYM_ITEMINSTANCE_GETICON = "?getIcon@ItemInstance@@QEAAPEAVIcon@@XZ";
 static const char* SYM_ITEMINSTANCE_MINEBLOCK = "?mineBlock@ItemInstance@@QEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
 static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
 static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
+static const char* SYM_TEXTURES_BIND_RESOURCE = "?bindTexture@Textures@@QEAAXPEAVResourceLocation@@@Z";
+static const char* SYM_TEXTURES_LOAD_BY_NAME = "?loadTexture@Textures@@AEAAHW4_TEXTURE_NAME@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
+static const char* SYM_TEXTURES_LOAD_BY_INDEX_PUBLIC = "?loadTexture@Textures@@QEAAHH@Z";
+static const char* SYM_TEXTURES_LOAD_BY_INDEX_PRIVATE = "?loadTexture@Textures@@AEAAHH@Z";
+static const char* SYM_STITCHED_GETU0 = "?getU0@StitchedTexture@@UEBAM_N@Z";
+static const char* SYM_STITCHED_GETU1 = "?getU1@StitchedTexture@@UEBAM_N@Z";
+static const char* SYM_STITCHED_GETV0 = "?getV0@StitchedTexture@@UEBAM_N@Z";
+static const char* SYM_STITCHED_GETV1 = "?getV1@StitchedTexture@@UEBAM_N@Z";
+static const char* SYM_TEXATLAS_BLOCKS = "?LOCATION_BLOCKS@TextureAtlas@@2VResourceLocation@@A";
+static const char* SYM_TEXATLAS_ITEMS = "?LOCATION_ITEMS@TextureAtlas@@2VResourceLocation@@A";
 
 bool SymbolResolver::Initialize()
 {
@@ -91,9 +102,21 @@ bool SymbolResolver::ResolveGameFunctions()
     pSimpleIconCtor      = Resolve(SYM_SIMPLE_ICON_CTOR);
     pOperatorNew         = Resolve(SYM_OPERATOR_NEW);
     pRegisterIcon        = Resolve(SYM_REGISTER_ICON);
+    pItemInstanceGetIcon = Resolve(SYM_ITEMINSTANCE_GETICON);
     pItemInstanceMineBlock = Resolve(SYM_ITEMINSTANCE_MINEBLOCK);
     pItemMineBlock = Resolve(SYM_ITEM_MINEBLOCK);
     pDiggerItemMineBlock = Resolve(SYM_DIGGERITEM_MINEBLOCK);
+    pTexturesBindTextureResource = Resolve(SYM_TEXTURES_BIND_RESOURCE);
+    pTexturesLoadTextureByName = Resolve(SYM_TEXTURES_LOAD_BY_NAME);
+    pTexturesLoadTextureByIndex = Resolve(SYM_TEXTURES_LOAD_BY_INDEX_PUBLIC);
+    if (!pTexturesLoadTextureByIndex)
+        pTexturesLoadTextureByIndex = Resolve(SYM_TEXTURES_LOAD_BY_INDEX_PRIVATE);
+    pStitchedGetU0 = Resolve(SYM_STITCHED_GETU0);
+    pStitchedGetU1 = Resolve(SYM_STITCHED_GETU1);
+    pStitchedGetV0 = Resolve(SYM_STITCHED_GETV0);
+    pStitchedGetV1 = Resolve(SYM_STITCHED_GETV1);
+    pTextureAtlasLocationBlocks = Resolve(SYM_TEXATLAS_BLOCKS);
+    pTextureAtlasLocationItems = Resolve(SYM_TEXATLAS_ITEMS);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140d.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandle(nullptr), SYM_OPERATOR_NEW);
@@ -120,9 +143,19 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("SimpleIcon::SimpleIcon", pSimpleIconCtor);
     logSym("operator new", pOperatorNew);
     logSym("registerIcon", pRegisterIcon);
+    logSym("ItemInstance::getIcon", pItemInstanceGetIcon);
     logSym("ItemInstance::mineBlock", pItemInstanceMineBlock);
     logSym("Item::mineBlock", pItemMineBlock);
     logSym("DiggerItem::mineBlock", pDiggerItemMineBlock);
+    logSym("Textures::bindTexture(ResourceLocation)", pTexturesBindTextureResource);
+    logSym("Textures::loadTexture(TEXTURE_NAME,wstring)", pTexturesLoadTextureByName);
+    logSym("Textures::loadTexture(int)", pTexturesLoadTextureByIndex);
+    logSym("StitchedTexture::getU0", pStitchedGetU0);
+    logSym("StitchedTexture::getU1", pStitchedGetU1);
+    logSym("StitchedTexture::getV0", pStitchedGetV0);
+    logSym("StitchedTexture::getV1", pStitchedGetV1);
+    logSym("TextureAtlas::LOCATION_BLOCKS", pTextureAtlasLocationBlocks);
+    logSym("TextureAtlas::LOCATION_ITEMS", pTextureAtlasLocationItems);
 
     bool ok = pRunStaticCtors && pMinecraftTick && pMinecraftInit;
     if (ok)

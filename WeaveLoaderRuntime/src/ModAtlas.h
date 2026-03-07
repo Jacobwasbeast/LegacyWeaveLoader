@@ -16,17 +16,23 @@ namespace ModAtlas
     {
         std::wstring iconName;  // e.g. "examplemod:ruby_ore"
         int atlasType;          // 0=blocks/terrain, 1=items
+        int page;               // atlas page index (0 or 1)
         int row, col;           // Grid position in atlas
     };
 
     /// Call before textures->stitch(). Returns path to generated dir, or empty if none.
     std::string BuildAtlases(const std::string& modsPath, const std::string& gameResPath);
+    void SetVirtualAtlasDirectory(const std::string& dir);
 
     /// Get path to merged terrain.png (if built)
     std::string GetMergedTerrainPath();
 
     /// Get path to merged items.png (if built)
     std::string GetMergedItemsPath();
+    std::string GetMergedPagePath(int atlasType, int page);
+    std::string GetVirtualPagePath(int atlasType, int page);
+    std::string GetMergedTerrainPage1Path();
+    std::string GetMergedItemsPage1Path();
 
     /// Get mod texture entries for injection into texture map
     const std::vector<ModTextureEntry>& GetBlockEntries();
@@ -60,4 +66,13 @@ namespace ModAtlas
 
     /// Look up a mod icon by name. Returns the SimpleIcon* or nullptr if not a mod icon.
     void* LookupModIcon(const std::wstring& name);
+    bool TryGetIconRoute(void* iconPtr, int& outAtlasType, int& outPage);
+
+    /// Called by icon UV hooks so bind hooks can route to the right page.
+    void NotifyIconSampled(void* iconPtr);
+
+    /// Pop pending page decision from the last icon UV access.
+    bool PopPendingPage(int& outAtlasType, int& outPage);
+    bool PeekPendingPage(int& outAtlasType, int& outPage);
+    void ClearPendingPage();
 }

@@ -17,11 +17,27 @@
 namespace ModAtlas
 {
     static std::string s_mergedDir;
+    static std::string s_virtualAtlasDir;
+    static std::string s_mergedTerrainPage1Path;
+    static std::string s_mergedItemsPage1Path;
     static std::vector<ModTextureEntry> s_blockEntries;
     static std::vector<ModTextureEntry> s_itemEntries;
     static bool s_hasModTextures = false;
+    static bool s_hasTerrainAtlas = false;
+    static bool s_hasItemsAtlas = false;
+    static bool s_hasTerrainPage0Mods = false;
+    static bool s_hasItemsPage0Mods = false;
+    static int s_terrainPages = 0;
+    static int s_itemPages = 0;
     static void* s_simpleIconCtor = nullptr;
     static void* (*s_operatorNew)(size_t) = nullptr;
+    static std::unordered_map<std::wstring, void*> s_modIcons;
+    struct IconRouteInfo { int atlasType; int page; };
+    static std::unordered_map<void*, IconRouteInfo> s_iconRoutes;
+    static RegisterIcon_fn s_originalRegisterIcon = nullptr;
+    static thread_local bool s_hasPendingPage = false;
+    static thread_local int s_pendingAtlasType = -1;
+    static thread_local int s_pendingPage = 0;
 
     // iconType is at offset 8 in PreStitchedTextureMap (verified via getIconType disassembly)
 
@@ -93,6 +109,25 @@ namespace ModAtlas
         return *data != nullptr;
     }
 
+    static bool FileExists(const std::string& path)
+    {
+        DWORD attr = GetFileAttributesA(path.c_str());
+        return (attr != INVALID_FILE_ATTRIBUTES) && !(attr & FILE_ATTRIBUTE_DIRECTORY);
+    }
+
+    static std::string BuildPageOutputPath(const std::string& baseDir, const char* stem, int page)
+    {
+        if (page <= 0) return baseDir + "\\" + stem + ".png";
+        return baseDir + "\\" + stem + "_p" + std::to_string(page) + ".png";
+    }
+
+    static std::string BuildVirtualPageOutputPath(const std::string& baseDir, const char* stem, int page)
+    {
+        if (baseDir.empty()) return "";
+        if (page <= 0) return baseDir + "\\" + stem + ".png";
+        return baseDir + "\\" + stem + "_p" + std::to_string(page) + ".png";
+    }
+
     static void Blit16x16(unsigned char* dst, int dstW, int dstH, int dstX, int dstY,
                           const unsigned char* src, int srcW, int srcH)
     {
@@ -133,8 +168,9 @@ namespace ModAtlas
         return true;
     }
 
-    static bool BuildAtlas(const std::string& vanillaPath, const std::string& outPath,
-                           const std::vector<std::pair<std::string, std::string>>& modTextures,
+    static size_t BuildAtlasPage(const std::string& vanillaPath, const std::string& outPath,
+                           const std::vector<std::pair<std::string, std::string>>& modTextures, size_t startIndex,
+                           int atlasType, int page,
                            int gridCols, int gridRows, int iconSize,
                            std::vector<ModTextureEntry>& entries)
     {
@@ -145,6 +181,7 @@ namespace ModAtlas
         if (!img) return false;
 
         int vw = 0, vh = 0, vc = 0;
+        bool loadedVanilla = false;
         if (!vanillaPath.empty())
         {
             unsigned char* vanilla = stbi_load(vanillaPath.c_str(), &vw, &vh, &vc, 4);
@@ -155,7 +192,16 @@ namespace ModAtlas
                 for (int y = 0; y < copyH; y++)
                     memcpy(img + y * imgW * 4, vanilla + y * vw * 4, copyW * 4);
                 stbi_image_free(vanilla);
+                loadedVanilla = true;
             }
+        }
+
+        if (!loadedVanilla)
+        {
+            LogUtil::Log("[WeaveLoader] ModAtlas: ERROR could not load vanilla atlas base '%s' (atlasType=%d page=%d)",
+                         vanillaPath.c_str(), atlasType, page);
+            free(img);
+            return 0;
         }
 
         // Find all empty (fully transparent) cells in the atlas
@@ -172,15 +218,18 @@ namespace ModAtlas
         LogUtil::Log("[WeaveLoader] ModAtlas: found %zu empty cells in %dx%d atlas",
                      emptyCells.size(), gridCols, gridRows);
 
+        size_t consumed = 0;
         size_t cellIdx = 0;
-        for (const auto& tex : modTextures)
+        for (size_t texIdx = startIndex; texIdx < modTextures.size(); ++texIdx)
         {
+            const auto& tex = modTextures[texIdx];
             const std::string& iconName = tex.first;
             const std::string& path = tex.second;
 
             if (cellIdx >= emptyCells.size())
             {
-                LogUtil::Log("[WeaveLoader] ModAtlas: no empty cells left for %s!", iconName.c_str());
+                LogUtil::Log("[WeaveLoader] ModAtlas: page %d full for atlasType=%d (stopped at %s)",
+                             page, atlasType, iconName.c_str());
                 break;
             }
 
@@ -200,9 +249,11 @@ namespace ModAtlas
             stbi_image_free(src);
 
             std::wstring wname(iconName.begin(), iconName.end());
-            entries.push_back({ wname, 0, row, col });
+            entries.push_back({ wname, atlasType, page, row, col });
+            consumed++;
 
-            LogUtil::Log("[WeaveLoader] ModAtlas: placed '%s' at row=%d col=%d", iconName.c_str(), row, col);
+            LogUtil::Log("[WeaveLoader] ModAtlas: placed '%s' at page=%d row=%d col=%d",
+                         iconName.c_str(), page, row, col);
         }
 
         std::string dir = outPath.substr(0, outPath.find_last_of("\\/"));
@@ -210,14 +261,74 @@ namespace ModAtlas
 
         int ok = stbi_write_png(outPath.c_str(), imgW, imgH, 4, img, imgW * 4);
         free(img);
-        return ok != 0;
+        if (!ok) return 0;
+        return consumed;
+    }
+
+    static size_t BuildModOnlyAtlasPage(const std::string& outPath,
+                                  const std::vector<std::pair<std::string, std::string>>& modTextures, size_t startIndex,
+                                  int atlasType, int page,
+                                  int gridCols, int gridRows, int iconSize,
+                                  std::vector<ModTextureEntry>& entries)
+    {
+        const int imgW = gridCols * iconSize;
+        const int imgH = gridRows * iconSize;
+        unsigned char* img = (unsigned char*)calloc(imgW * imgH, 4); // transparent base
+        if (!img) return 0;
+
+        const size_t capacity = (size_t)gridCols * (size_t)gridRows;
+        size_t consumed = 0;
+        for (size_t texIdx = startIndex; texIdx < modTextures.size() && consumed < capacity; ++texIdx)
+        {
+            const auto& tex = modTextures[texIdx];
+            const std::string& iconName = tex.first;
+            const std::string& path = tex.second;
+
+            int sw = 0, sh = 0, sc = 0;
+            unsigned char* src = nullptr;
+            if (!LoadPng(path, &sw, &sh, &sc, &src))
+            {
+                LogUtil::Log("[WeaveLoader] ModAtlas: failed to load %s", path.c_str());
+                continue;
+            }
+
+            int row = (int)(consumed / (size_t)gridCols);
+            int col = (int)(consumed % (size_t)gridCols);
+            consumed++;
+
+            Blit16x16(img, imgW, imgH, col * iconSize, row * iconSize, src, sw, sh);
+            stbi_image_free(src);
+
+            std::wstring wname(iconName.begin(), iconName.end());
+            entries.push_back({ wname, atlasType, page, row, col });
+            LogUtil::Log("[WeaveLoader] ModAtlas: placed '%s' at page=%d row=%d col=%d (mod-only)",
+                         iconName.c_str(), page, row, col);
+        }
+
+        std::string dir = outPath.substr(0, outPath.find_last_of("\\/"));
+        CreateDirectoryA(dir.c_str(), nullptr);
+
+        int ok = stbi_write_png(outPath.c_str(), imgW, imgH, 4, img, imgW * 4);
+        free(img);
+        if (!ok) return 0;
+        return consumed;
     }
 
     std::string BuildAtlases(const std::string& modsPath, const std::string& gameResPath)
     {
         s_blockEntries.clear();
         s_itemEntries.clear();
+        s_modIcons.clear();
+        s_iconRoutes.clear();
         s_hasModTextures = false;
+        s_hasTerrainAtlas = false;
+        s_hasItemsAtlas = false;
+        s_hasTerrainPage0Mods = false;
+        s_hasItemsPage0Mods = false;
+        s_terrainPages = 0;
+        s_itemPages = 0;
+        s_mergedTerrainPage1Path.clear();
+        s_mergedItemsPage1Path.clear();
 
         std::vector<std::pair<std::string, std::string>> blockPaths, itemPaths;
         FindModTextures(modsPath, blockPaths, itemPaths);
@@ -238,50 +349,142 @@ namespace ModAtlas
         CreateDirectoryA((base + "mods").c_str(), nullptr);
         CreateDirectoryA((base + "mods\\ModLoader").c_str(), nullptr);
         CreateDirectoryA(s_mergedDir.c_str(), nullptr);
+        if (!s_virtualAtlasDir.empty())
+            CreateDirectoryA(s_virtualAtlasDir.c_str(), nullptr);
 
-        std::string vanillaTerrain = gameResPath + "\\terrain.png";
-        std::string vanillaItems = gameResPath + "\\items.png";
-        std::string outTerrain = s_mergedDir + "\\terrain.png";
-        std::string outItems = s_mergedDir + "\\items.png";
+        s_mergedTerrainPage1Path = BuildPageOutputPath(s_mergedDir, "terrain", 1);
+        s_mergedItemsPage1Path = BuildPageOutputPath(s_mergedDir, "items", 1);
+
+        std::string vanillaTerrainPath = gameResPath + "\\terrain.png";
 
         if (!blockPaths.empty())
         {
-            if (BuildAtlas(vanillaTerrain, outTerrain, blockPaths, 16, 32, 16, s_blockEntries))
+            size_t cursor = 0;
+            int page = 1; // page 0 remains vanilla; modded blocks use dedicated pages
+            while (cursor < blockPaths.size())
+            {
+                std::string outPath = BuildPageOutputPath(s_mergedDir, "terrain", page);
+                // World block rendering binds the terrain atlas once for a whole pass.
+                // Keep terrain page 1 as a vanilla+mod merged atlas so both vanilla and
+                // modded block icons resolve in the same draw pass.
+                size_t placed = BuildAtlasPage(vanillaTerrainPath, outPath, blockPaths, cursor, 0, page, 16, 32, 16, s_blockEntries);
+                if (placed == 0)
+                    break;
+                if (!s_virtualAtlasDir.empty() && page > 0)
+                {
+                    std::string vpath = BuildVirtualPageOutputPath(s_virtualAtlasDir, "terrain", page);
+                    if (!vpath.empty())
+                        CopyFileA(outPath.c_str(), vpath.c_str(), FALSE);
+                }
+                cursor += placed;
+                page++;
+            }
+
+            if (cursor > 0)
             {
                 s_hasModTextures = true;
-                LogUtil::Log("[WeaveLoader] ModAtlas: built terrain.png with %zu mod textures", s_blockEntries.size());
+                s_hasTerrainAtlas = true;
+                s_terrainPages = page;
+                LogUtil::Log("[WeaveLoader] ModAtlas: built terrain pages count=%d", s_terrainPages);
+            }
+
+            if (cursor < blockPaths.size())
+            {
+                LogUtil::Log("[WeaveLoader] ModAtlas: WARNING terrain overflow, dropped %zu textures",
+                             blockPaths.size() - cursor);
             }
         }
 
         if (!itemPaths.empty())
         {
-            if (BuildAtlas(vanillaItems, outItems, itemPaths, 16, 16, 16, s_itemEntries))
+            size_t cursor = 0;
+            int page = 1; // page 0 remains vanilla; modded items use dedicated pages
+            while (cursor < itemPaths.size())
+            {
+                std::string outPath = BuildPageOutputPath(s_mergedDir, "items", page);
+                size_t placed = BuildModOnlyAtlasPage(outPath, itemPaths, cursor, 1, page, 16, 16, 16, s_itemEntries);
+                if (placed == 0)
+                    break;
+                if (!s_virtualAtlasDir.empty() && page > 0)
+                {
+                    std::string vpath = BuildVirtualPageOutputPath(s_virtualAtlasDir, "items", page);
+                    if (!vpath.empty())
+                        CopyFileA(outPath.c_str(), vpath.c_str(), FALSE);
+                }
+                cursor += placed;
+                page++;
+            }
+
+            if (cursor > 0)
             {
                 s_hasModTextures = true;
-                for (auto& e : s_itemEntries) e.atlasType = 1;
-                LogUtil::Log("[WeaveLoader] ModAtlas: built items.png with %zu mod textures", s_itemEntries.size());
+                s_hasItemsAtlas = true;
+                // page is one past the last generated page index.
+                s_itemPages = page;
+                LogUtil::Log("[WeaveLoader] ModAtlas: built item pages count=%d", s_itemPages);
+            }
+
+            if (cursor < itemPaths.size())
+            {
+                LogUtil::Log("[WeaveLoader] ModAtlas: WARNING item overflow, dropped %zu textures",
+                             itemPaths.size() - cursor);
             }
         }
 
         return s_hasModTextures ? s_mergedDir : "";
     }
 
+    void SetVirtualAtlasDirectory(const std::string& dir)
+    {
+        s_virtualAtlasDir = dir;
+        if (!s_virtualAtlasDir.empty())
+            CreateDirectoryA(s_virtualAtlasDir.c_str(), nullptr);
+    }
+
     std::string GetMergedTerrainPath()
     {
-        return s_mergedDir.empty() ? "" : s_mergedDir + "\\terrain.png";
+        return s_hasTerrainPage0Mods ? GetMergedPagePath(0, 0) : "";
     }
 
     std::string GetMergedItemsPath()
     {
-        return s_mergedDir.empty() ? "" : s_mergedDir + "\\items.png";
+        // Never replace vanilla items page 0 unless explicitly needed.
+        return s_hasItemsPage0Mods ? GetMergedPagePath(1, 0) : "";
+    }
+
+    std::string GetMergedPagePath(int atlasType, int page)
+    {
+        if (s_mergedDir.empty() || page < 0) return "";
+        if (atlasType == 0)
+        {
+            if (!s_hasTerrainAtlas || page >= s_terrainPages) return "";
+            return BuildPageOutputPath(s_mergedDir, "terrain", page);
+        }
+        if (!s_hasItemsAtlas || page >= s_itemPages) return "";
+        return BuildPageOutputPath(s_mergedDir, "items", page);
+    }
+
+    std::string GetVirtualPagePath(int atlasType, int page)
+    {
+        if (s_virtualAtlasDir.empty() || page < 0) return "";
+        if (atlasType == 0)
+            return BuildVirtualPageOutputPath(s_virtualAtlasDir, "terrain", page);
+        return BuildVirtualPageOutputPath(s_virtualAtlasDir, "items", page);
+    }
+
+    std::string GetMergedTerrainPage1Path()
+    {
+        return GetMergedPagePath(0, 1);
+    }
+
+    std::string GetMergedItemsPage1Path()
+    {
+        return GetMergedPagePath(1, 1);
     }
 
     const std::vector<ModTextureEntry>& GetBlockEntries() { return s_blockEntries; }
     const std::vector<ModTextureEntry>& GetItemEntries() { return s_itemEntries; }
     bool HasModTextures() { return s_hasModTextures; }
-
-    static std::unordered_map<std::wstring, void*> s_modIcons;
-    static RegisterIcon_fn s_originalRegisterIcon = nullptr;
 
     // Per-atlas-type textureMap pointers, saved during CreateModIcons for FixupModIcons.
     static void* s_terrainTextureMap = nullptr;
@@ -334,6 +537,8 @@ namespace ModAtlas
 
         std::string mergedTerrain = GetMergedTerrainPath();
         std::string mergedItems = GetMergedItemsPath();
+        if (mergedTerrain.empty() && mergedItems.empty())
+            return false;
 
         if (!mergedTerrain.empty())
             s_mergedTerrainW = std::wstring(mergedTerrain.begin(), mergedTerrain.end());
@@ -416,14 +621,18 @@ namespace ModAtlas
                 float u1 = static_cast<float>(e.col + 1) / 16.0f;
                 float v1 = static_cast<float>(e.row + 1) * vertRatio;
 
-                void* icon = s_operatorNew(128);
+                // SimpleIcon/StitchedTexture contains multiple std::wstring/vector fields.
+                // 128 bytes is too small in this binary and causes adjacent-object corruption.
+                constexpr size_t kSimpleIconAllocSize = 0x200;
+                void* icon = s_operatorNew(kSimpleIconAllocSize);
                 if (icon)
                 {
-                    memset(icon, 0, 128);
+                    memset(icon, 0, kSimpleIconAllocSize);
                     ctor(icon, &e.iconName, &e.iconName, u0, v0, u1, v1);
                     s_modIcons[e.iconName] = icon;
-                    LogUtil::Log("[WeaveLoader] ModAtlas: created icon '%ls' (atlas=%d, row=%d, col=%d)",
-                                 e.iconName.c_str(), iconType, e.row, e.col);
+                    s_iconRoutes[icon] = { iconType, e.page };
+                    LogUtil::Log("[WeaveLoader] ModAtlas: created icon '%ls' (atlas=%d, page=%d, row=%d, col=%d)",
+                                 e.iconName.c_str(), iconType, e.page, e.row, e.col);
                 }
             }
         };
@@ -464,9 +673,13 @@ namespace ModAtlas
             }
 
             int fixed = 0;
-            for (auto& kv : s_modIcons)
+            for (auto& routeKv : s_iconRoutes)
             {
-                void* icon = kv.second;
+                void* icon = routeKv.first;
+                const IconRouteInfo& route = routeKv.second;
+                if (route.atlasType != atlasType)
+                    continue;
+
                 void* existing = *reinterpret_cast<void**>(static_cast<char*>(icon) + 0x48);
                 if (!existing)
                 {
@@ -488,5 +701,60 @@ namespace ModAtlas
         if (it != s_modIcons.end())
             return it->second;
         return nullptr;
+    }
+
+    bool TryGetIconRoute(void* iconPtr, int& outAtlasType, int& outPage)
+    {
+        auto it = s_iconRoutes.find(iconPtr);
+        if (it == s_iconRoutes.end())
+            return false;
+        outAtlasType = it->second.atlasType;
+        outPage = it->second.page;
+        return true;
+    }
+
+    void NotifyIconSampled(void* iconPtr)
+    {
+        auto it = s_iconRoutes.find(iconPtr);
+        if (it != s_iconRoutes.end())
+        {
+            s_hasPendingPage = true;
+            s_pendingAtlasType = it->second.atlasType;
+            s_pendingPage = it->second.page;
+            return;
+        }
+
+        s_hasPendingPage = false;
+        s_pendingAtlasType = -1;
+        s_pendingPage = 0;
+    }
+
+    bool PopPendingPage(int& outAtlasType, int& outPage)
+    {
+        if (!s_hasPendingPage)
+            return false;
+
+        outAtlasType = s_pendingAtlasType;
+        outPage = s_pendingPage;
+        s_hasPendingPage = false;
+        s_pendingAtlasType = -1;
+        s_pendingPage = 0;
+        return true;
+    }
+
+    bool PeekPendingPage(int& outAtlasType, int& outPage)
+    {
+        if (!s_hasPendingPage)
+            return false;
+        outAtlasType = s_pendingAtlasType;
+        outPage = s_pendingPage;
+        return true;
+    }
+
+    void ClearPendingPage()
+    {
+        s_hasPendingPage = false;
+        s_pendingAtlasType = -1;
+        s_pendingPage = 0;
     }
 }

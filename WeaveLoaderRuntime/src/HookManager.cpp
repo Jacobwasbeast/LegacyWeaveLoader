@@ -68,6 +68,20 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
+    if (symbols.pItemInstanceGetIcon)
+    {
+        if (MH_CreateHook(symbols.pItemInstanceGetIcon,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceGetIcon),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceGetIcon)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::getIcon");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::getIcon (atlas page routing)");
+        }
+    }
+
     if (symbols.pItemMineBlock)
     {
         if (MH_CreateHook(symbols.pItemMineBlock,
@@ -93,6 +107,87 @@ bool HookManager::Install(const SymbolResolver& symbols)
         else
         {
             LogUtil::Log("[WeaveLoader] Hooked DiggerItem::mineBlock (managed item callbacks)");
+        }
+    }
+
+    GameHooks::SetAtlasLocationPointers(symbols.pTextureAtlasLocationBlocks, symbols.pTextureAtlasLocationItems);
+
+    if (symbols.pTexturesBindTextureResource)
+    {
+        if (MH_CreateHook(symbols.pTexturesBindTextureResource,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TexturesBindTextureResource),
+                          reinterpret_cast<void**>(&GameHooks::Original_TexturesBindTextureResource)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Textures::bindTexture(ResourceLocation)");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Textures::bindTexture(ResourceLocation) (atlas page routing)");
+        }
+    }
+
+    if (symbols.pTexturesLoadTextureByName)
+    {
+        if (MH_CreateHook(symbols.pTexturesLoadTextureByName,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TexturesLoadTextureByName),
+                          reinterpret_cast<void**>(&GameHooks::Original_TexturesLoadTextureByName)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Textures::loadTexture(TEXTURE_NAME,wstring)");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Textures::loadTexture(TEXTURE_NAME,wstring) (virtual atlas remap)");
+        }
+    }
+
+    if (symbols.pTexturesLoadTextureByIndex)
+    {
+        if (MH_CreateHook(symbols.pTexturesLoadTextureByIndex,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TexturesLoadTextureByIndex),
+                          reinterpret_cast<void**>(&GameHooks::Original_TexturesLoadTextureByIndex)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Textures::loadTexture(int)");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Textures::loadTexture(int) (terrain atlas page routing)");
+        }
+    }
+
+    if (symbols.pStitchedGetU0)
+    {
+        if (MH_CreateHook(symbols.pStitchedGetU0,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetU0),
+                          reinterpret_cast<void**>(&GameHooks::Original_StitchedGetU0)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getU0");
+        }
+    }
+    if (symbols.pStitchedGetU1)
+    {
+        if (MH_CreateHook(symbols.pStitchedGetU1,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetU1),
+                          reinterpret_cast<void**>(&GameHooks::Original_StitchedGetU1)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getU1");
+        }
+    }
+    if (symbols.pStitchedGetV0)
+    {
+        if (MH_CreateHook(symbols.pStitchedGetV0,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetV0),
+                          reinterpret_cast<void**>(&GameHooks::Original_StitchedGetV0)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getV0");
+        }
+    }
+    if (symbols.pStitchedGetV1)
+    {
+        if (MH_CreateHook(symbols.pStitchedGetV1,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetV1),
+                          reinterpret_cast<void**>(&GameHooks::Original_StitchedGetV1)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getV1");
         }
     }
 
