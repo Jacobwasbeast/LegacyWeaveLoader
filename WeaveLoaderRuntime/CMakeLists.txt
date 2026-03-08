@@ -87,6 +87,9 @@ add_library(WeaveLoaderRuntime SHARED
     src/DotNetHost.cpp
     src/IdRegistry.cpp
     src/NativeExports.cpp
+    src/CustomPickaxeRegistry.cpp
+    src/CustomToolMaterialRegistry.cpp
+    src/CustomBlockRegistry.cpp
     src/CreativeInventory.cpp
     src/FurnaceRecipeRegistry.cpp
     src/MainMenuOverlay.cpp

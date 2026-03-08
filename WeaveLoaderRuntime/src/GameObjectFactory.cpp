@@ -5,6 +5,7 @@
 #include <Windows.h>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 
 // Tile::Tile(int id, Material* material, bool isSolidRender) — protected ctor
 typedef void (__fastcall *TileCtor_fn)(void* thisPtr, int id, void* material, bool isSolidRender);
@@ -24,6 +25,10 @@ typedef void (__fastcall *TileItemCtor_fn)(void* thisPtr, int id);
 typedef void (__fastcall *ItemCtor_fn)(void* thisPtr, int id);
 // PickaxeItem::PickaxeItem(int id, const Item::Tier* tier)
 typedef void (__fastcall *PickaxeCtor_fn)(void* thisPtr, int id, const void* tier);
+typedef void (__fastcall *ShovelCtor_fn)(void* thisPtr, int id, const void* tier);
+typedef void (__fastcall *HoeCtor_fn)(void* thisPtr, int id, const void* tier);
+typedef void (__fastcall *HatchetCtor_fn)(void* thisPtr, int id, const void* tier);
+typedef void (__fastcall *WeaponCtor_fn)(void* thisPtr, int id, const void* tier);
 // Item* Item::setIconName(const std::wstring&)
 typedef void* (__fastcall *ItemSetIconName_fn)(void* thisPtr, const std::wstring& name);
 // Item::getDescriptionId(int) — used to extract the descriptionId field offset
@@ -40,6 +45,10 @@ static TileItemCtor_fn    fnTileItemCtor   = nullptr;
 
 static ItemCtor_fn        fnItemCtor       = nullptr;
 static PickaxeCtor_fn     fnPickaxeCtor    = nullptr;
+static ShovelCtor_fn      fnShovelCtor     = nullptr;
+static HoeCtor_fn         fnHoeCtor        = nullptr;
+static HatchetCtor_fn     fnHatchetCtor    = nullptr;
+static WeaponCtor_fn      fnWeaponCtor     = nullptr;
 static ItemSetIconName_fn fnItemSetIconName= nullptr;
 static int s_itemDescIdOffset = -1; // offset of descriptionId field in Item, extracted from getDescriptionId
 
@@ -54,6 +63,20 @@ static const int ITEM_ALLOC_SIZE = 1024;
 static const int TILEITEM_ALLOC_SIZE = 1024;
 
 static bool s_resolved = false;
+static std::unordered_map<int, void*> s_createdItems;
+
+static int MapTierMaterial(int tier)
+{
+    switch (tier)
+    {
+        case 0: return 1; // wood
+        case 1: return 2; // stone
+        case 2: return 3; // iron
+        case 3: return 5; // diamond
+        case 4: return 4; // gold
+        default: return 5;
+    }
+}
 
 static void* GetMaterial(int idx)
 {
@@ -101,6 +124,10 @@ bool ResolveSymbols(SymbolResolver& resolver)
     // Item constructor — protected (IEAA not QEAA)
     fnItemCtor = (ItemCtor_fn)resolver.Resolve("??0Item@@IEAA@H@Z");
     fnPickaxeCtor = (PickaxeCtor_fn)resolver.Resolve("??0PickaxeItem@@QEAA@HPEBVTier@Item@@@Z");
+    fnShovelCtor = (ShovelCtor_fn)resolver.Resolve("??0ShovelItem@@QEAA@HPEBVTier@Item@@@Z");
+    fnHoeCtor = (HoeCtor_fn)resolver.Resolve("??0HoeItem@@QEAA@HPEBVTier@Item@@@Z");
+    fnHatchetCtor = (HatchetCtor_fn)resolver.Resolve("??0HatchetItem@@QEAA@HPEBVTier@Item@@@Z");
+    fnWeaponCtor = (WeaponCtor_fn)resolver.Resolve("??0WeaponItem@@QEAA@HPEBVTier@Item@@@Z");
 
     // Item::setIconName
     fnItemSetIconName = (ItemSetIconName_fn)resolver.Resolve(
@@ -190,6 +217,10 @@ bool ResolveSymbols(SymbolResolver& resolver)
     logSym("TileItem::TileItem", (void*)fnTileItemCtor);
     logSym("Item::Item",         (void*)fnItemCtor);
     logSym("PickaxeItem::PickaxeItem", (void*)fnPickaxeCtor);
+    logSym("ShovelItem::ShovelItem", (void*)fnShovelCtor);
+    logSym("HoeItem::HoeItem", (void*)fnHoeCtor);
+    logSym("HatchetItem::HatchetItem", (void*)fnHatchetCtor);
+    logSym("WeaponItem::WeaponItem", (void*)fnWeaponCtor);
     logSym("Item::setIconName",  (void*)fnItemSetIconName);
     logSym("Material::stone addr", (void*)s_materialAddrs[1]);
     logSym("SOUND_STONE addr",     (void*)s_soundAddrs[1]);
@@ -320,6 +351,7 @@ bool CreateItem(int itemId, int maxStackSize, int maxDamage, const wchar_t* icon
                  itemId, ctorParam, maxStackSize, maxDamage,
                  iconName ? iconName : L"<none>", descriptionId);
 
+    s_createdItems[itemId] = item;
     return true;
 }
 
@@ -346,17 +378,7 @@ bool CreatePickaxeItem(int itemId, int tier, int maxDamage, const wchar_t* iconN
     // Ensure pickaxe category/material for crafting menus:
     // baseType=pickaxe(3), material depends on tier.
     *reinterpret_cast<int*>(static_cast<char*>(item) + 0x38) = 3;
-    int material = 5; // diamond default
-    switch (tier)
-    {
-        case 0: material = 1; break; // wood
-        case 1: material = 2; break; // stone
-        case 2: material = 3; break; // iron
-        case 3: material = 5; break; // diamond
-        case 4: material = 4; break; // gold
-        default: break;
-    }
-    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x3C) = material;
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x3C) = MapTierMaterial(tier);
 
     // Tools should always stack to 1.
     *reinterpret_cast<int*>(static_cast<char*>(item) + 0x24) = 1;
@@ -381,7 +403,89 @@ bool CreatePickaxeItem(int itemId, int tier, int maxDamage, const wchar_t* iconN
 
     LogUtil::Log("[WeaveLoader] Created PickaxeItem id=%d (ctorParam=%d, tier=%d, damage=%d, icon=%ls, descId=%d)",
                  itemId, ctorParam, tier, maxDamage, iconName ? iconName : L"<none>", descriptionId);
+    s_createdItems[itemId] = item;
     return true;
+}
+
+static bool CreateTieredItem(
+    const char* typeName,
+    void* ctorRaw,
+    int baseType,
+    int itemId,
+    int tier,
+    int maxDamage,
+    const wchar_t* iconName,
+    int descriptionId)
+{
+    if (!s_resolved || !ctorRaw)
+    {
+        LogUtil::Log("[WeaveLoader] %s: symbols not resolved", typeName);
+        return false;
+    }
+
+    const void* tierPtr = GetTier(tier);
+    if (!tierPtr)
+    {
+        LogUtil::Log("[WeaveLoader] %s: invalid tier %d", typeName, tier);
+        return false;
+    }
+
+    int ctorParam = itemId - 256;
+    void* item = ::operator new(ITEM_ALLOC_SIZE);
+    memset(item, 0, ITEM_ALLOC_SIZE);
+    reinterpret_cast<PickaxeCtor_fn>(ctorRaw)(item, ctorParam, tierPtr);
+
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x38) = baseType;
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x3C) = MapTierMaterial(tier);
+    *reinterpret_cast<int*>(static_cast<char*>(item) + 0x24) = 1;
+
+    if (maxDamage > 0)
+        *reinterpret_cast<int*>(static_cast<char*>(item) + 0x28) = maxDamage;
+
+    if (fnItemSetIconName)
+    {
+        std::wstring name = (iconName && iconName[0]) ? iconName : L"MISSING_ICON_ITEM";
+        fnItemSetIconName(item, name);
+    }
+
+    if (s_itemDescIdOffset > 0 && descriptionId >= 0)
+    {
+        *reinterpret_cast<unsigned int*>(static_cast<char*>(item) + s_itemDescIdOffset) =
+            static_cast<unsigned int>(descriptionId);
+    }
+
+    LogUtil::Log("[WeaveLoader] Created %s id=%d (ctorParam=%d, tier=%d, damage=%d, icon=%ls, descId=%d)",
+                 typeName, itemId, ctorParam, tier, maxDamage, iconName ? iconName : L"<none>", descriptionId);
+    s_createdItems[itemId] = item;
+    return true;
+}
+
+bool CreateShovelItem(int itemId, int tier, int maxDamage, const wchar_t* iconName, int descriptionId)
+{
+    return CreateTieredItem("ShovelItem", fnShovelCtor, 2, itemId, tier, maxDamage, iconName, descriptionId);
+}
+
+bool CreateHoeItem(int itemId, int tier, int maxDamage, const wchar_t* iconName, int descriptionId)
+{
+    return CreateTieredItem("HoeItem", fnHoeCtor, 5, itemId, tier, maxDamage, iconName, descriptionId);
+}
+
+bool CreateAxeItem(int itemId, int tier, int maxDamage, const wchar_t* iconName, int descriptionId)
+{
+    return CreateTieredItem("HatchetItem", fnHatchetCtor, 4, itemId, tier, maxDamage, iconName, descriptionId);
+}
+
+bool CreateSwordItem(int itemId, int tier, int maxDamage, const wchar_t* iconName, int descriptionId)
+{
+    return CreateTieredItem("WeaponItem", fnWeaponCtor, 1, itemId, tier, maxDamage, iconName, descriptionId);
+}
+
+void* FindItem(int itemId)
+{
+    const auto it = s_createdItems.find(itemId);
+    if (it == s_createdItems.end())
+        return nullptr;
+    return it->second;
 }
 
 } // namespace GameObjectFactory

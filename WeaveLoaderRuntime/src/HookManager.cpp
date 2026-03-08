@@ -236,6 +236,76 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
+    if (symbols.pPickaxeItemGetDestroySpeed)
+    {
+        if (MH_CreateHook(symbols.pPickaxeItemGetDestroySpeed,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_PickaxeItemGetDestroySpeed),
+                          reinterpret_cast<void**>(&GameHooks::Original_PickaxeItemGetDestroySpeed)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook PickaxeItem::getDestroySpeed");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked PickaxeItem::getDestroySpeed (custom pickaxe tiers)");
+        }
+    }
+
+    if (symbols.pPickaxeItemCanDestroySpecial)
+    {
+        if (MH_CreateHook(symbols.pPickaxeItemCanDestroySpecial,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_PickaxeItemCanDestroySpecial),
+                          reinterpret_cast<void**>(&GameHooks::Original_PickaxeItemCanDestroySpecial)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook PickaxeItem::canDestroySpecial");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked PickaxeItem::canDestroySpecial (custom pickaxe tiers)");
+        }
+    }
+
+    if (symbols.pShovelItemGetDestroySpeed)
+    {
+        if (MH_CreateHook(symbols.pShovelItemGetDestroySpeed,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ShovelItemGetDestroySpeed),
+                          reinterpret_cast<void**>(&GameHooks::Original_ShovelItemGetDestroySpeed)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ShovelItem::getDestroySpeed");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ShovelItem::getDestroySpeed (custom tool materials)");
+        }
+    }
+
+    if (symbols.pShovelItemCanDestroySpecial)
+    {
+        if (MH_CreateHook(symbols.pShovelItemCanDestroySpecial,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ShovelItemCanDestroySpecial),
+                          reinterpret_cast<void**>(&GameHooks::Original_ShovelItemCanDestroySpecial)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ShovelItem::canDestroySpecial");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ShovelItem::canDestroySpecial (custom tool materials)");
+        }
+    }
+
+    if (symbols.pPlayerCanDestroy)
+    {
+        if (MH_CreateHook(symbols.pPlayerCanDestroy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_PlayerCanDestroy),
+                          reinterpret_cast<void**>(&GameHooks::Original_PlayerCanDestroy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Player::canDestroy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Player::canDestroy (block harvest enforcement)");
+        }
+    }
+
     if (symbols.pServerPlayerGameModeUseItem)
     {
         if (MH_CreateHook(symbols.pServerPlayerGameModeUseItem,
@@ -265,6 +335,7 @@ bool HookManager::Install(const SymbolResolver& symbols)
     }
 
     GameHooks::SetAtlasLocationPointers(symbols.pTextureAtlasLocationBlocks, symbols.pTextureAtlasLocationItems);
+    GameHooks::SetTileTilesArray(symbols.pTileTiles);
 
     if (symbols.pTexturesBindTextureResource)
     {

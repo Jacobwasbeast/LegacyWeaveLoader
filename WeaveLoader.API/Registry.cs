@@ -27,6 +27,12 @@ public static class Registry
 
         public static RegisteredItem Register(Identifier id, WeaveLoader.API.Item.Item item, ItemProperties properties)
             => ItemRegistry.Register(id, item, properties);
+
+        public static RegisteredToolMaterial RegisterToolMaterial(Identifier id, ToolMaterialDefinition definition)
+            => ToolMaterialRegistry.Register(id, definition);
+
+        public static RegisteredPickaxeTier RegisterPickaxeTier(Identifier id, PickaxeTierDefinition definition)
+            => PickaxeTierRegistry.Register(id, definition);
     }
 
     /// <summary>Entity registration. Call Register() with a namespaced ID and EntityDefinition.</summary>

@@ -30,6 +30,11 @@ static const char* SYM_CLOCK_GETSOURCEHEIGHT = "?getSourceHeight@ClockTexture@@U
 static const char* SYM_ITEMINSTANCE_MINEBLOCK = "?mineBlock@ItemInstance@@QEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
 static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
 static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
+static const char* SYM_PICKAXEITEM_GETDESTROYSPEED = "?getDestroySpeed@PickaxeItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
+static const char* SYM_PICKAXEITEM_CANDESTROYSPECIAL = "?canDestroySpecial@PickaxeItem@@UEAA_NPEAVTile@@@Z";
+static const char* SYM_SHOVELITEM_GETDESTROYSPEED = "?getDestroySpeed@ShovelItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
+static const char* SYM_SHOVELITEM_CANDESTROYSPECIAL = "?canDestroySpecial@ShovelItem@@UEAA_NPEAVTile@@@Z";
+static const char* SYM_PLAYER_CANDESTROY = "?canDestroy@Player@@QEAA_NPEAVTile@@@Z";
 static const char* SYM_SERVER_PLAYER_GAMEMODE_USEITEM = "?useItem@ServerPlayerGameMode@@QEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
 static const char* SYM_MULTI_PLAYER_GAMEMODE_USEITEM = "?useItem@MultiPlayerGameMode@@UEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
 static const char* SYM_TEXTURES_BIND_RESOURCE = "?bindTexture@Textures@@QEAAXPEAVResourceLocation@@@Z";
@@ -55,6 +60,7 @@ static const char* SYM_ITEMINSTANCE_HURTANDBREAK = "?hurtAndBreak@ItemInstance@@
 static const char* SYM_ABSTRACTCONTAINERMENU_BROADCASTCHANGES = "?broadcastChanges@AbstractContainerMenu@@UEAAXXZ";
 static const char* SYM_TEXATLAS_BLOCKS = "?LOCATION_BLOCKS@TextureAtlas@@2VResourceLocation@@A";
 static const char* SYM_TEXATLAS_ITEMS = "?LOCATION_ITEMS@TextureAtlas@@2VResourceLocation@@A";
+static const char* SYM_TILE_TILES = "?tiles@Tile@@2PEAPEAV1@EA";
 
 bool SymbolResolver::Initialize()
 {
@@ -137,6 +143,11 @@ bool SymbolResolver::ResolveGameFunctions()
     pItemInstanceMineBlock = Resolve(SYM_ITEMINSTANCE_MINEBLOCK);
     pItemMineBlock = Resolve(SYM_ITEM_MINEBLOCK);
     pDiggerItemMineBlock = Resolve(SYM_DIGGERITEM_MINEBLOCK);
+    pPickaxeItemGetDestroySpeed = Resolve(SYM_PICKAXEITEM_GETDESTROYSPEED);
+    pPickaxeItemCanDestroySpecial = Resolve(SYM_PICKAXEITEM_CANDESTROYSPECIAL);
+    pShovelItemGetDestroySpeed = Resolve(SYM_SHOVELITEM_GETDESTROYSPEED);
+    pShovelItemCanDestroySpecial = Resolve(SYM_SHOVELITEM_CANDESTROYSPECIAL);
+    pPlayerCanDestroy = Resolve(SYM_PLAYER_CANDESTROY);
     pServerPlayerGameModeUseItem = Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEM);
     pMultiPlayerGameModeUseItem = Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEM);
     pTexturesBindTextureResource = Resolve(SYM_TEXTURES_BIND_RESOURCE);
@@ -164,6 +175,7 @@ bool SymbolResolver::ResolveGameFunctions()
     pAbstractContainerMenuBroadcastChanges = Resolve(SYM_ABSTRACTCONTAINERMENU_BROADCASTCHANGES);
     pTextureAtlasLocationBlocks = Resolve(SYM_TEXATLAS_BLOCKS);
     pTextureAtlasLocationItems = Resolve(SYM_TEXATLAS_ITEMS);
+    pTileTiles = Resolve(SYM_TILE_TILES);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140d.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandle(nullptr), SYM_OPERATOR_NEW);
@@ -202,6 +214,11 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("ItemInstance::mineBlock", pItemInstanceMineBlock);
     logSym("Item::mineBlock", pItemMineBlock);
     logSym("DiggerItem::mineBlock", pDiggerItemMineBlock);
+    logSym("PickaxeItem::getDestroySpeed", pPickaxeItemGetDestroySpeed);
+    logSym("PickaxeItem::canDestroySpecial", pPickaxeItemCanDestroySpecial);
+    logSym("ShovelItem::getDestroySpeed", pShovelItemGetDestroySpeed);
+    logSym("ShovelItem::canDestroySpecial", pShovelItemCanDestroySpecial);
+    logSym("Player::canDestroy", pPlayerCanDestroy);
     logSym("ServerPlayerGameMode::useItem", pServerPlayerGameModeUseItem);
     logSym("MultiPlayerGameMode::useItem", pMultiPlayerGameModeUseItem);
     logSym("Textures::bindTexture(ResourceLocation)", pTexturesBindTextureResource);
@@ -225,6 +242,7 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("AbstractContainerMenu::broadcastChanges", pAbstractContainerMenuBroadcastChanges);
     logSym("TextureAtlas::LOCATION_BLOCKS", pTextureAtlasLocationBlocks);
     logSym("TextureAtlas::LOCATION_ITEMS", pTextureAtlasLocationItems);
+    logSym("Tile::tiles", pTileTiles);
 
     bool ok = pRunStaticCtors && pMinecraftTick && pMinecraftInit;
     if (ok)

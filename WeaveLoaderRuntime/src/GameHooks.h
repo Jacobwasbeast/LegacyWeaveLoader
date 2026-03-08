@@ -25,6 +25,9 @@ typedef void (__fastcall *AnimatedTextureCycleFrames_fn)(void* thisPtr);
 typedef int (__fastcall *TextureGetSourceDim_fn)(void* thisPtr);
 typedef void (__fastcall *ItemInstanceMineBlock_fn)(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
 typedef bool (__fastcall *ItemMineBlock_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
+typedef float (__fastcall *PickaxeGetDestroySpeed_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* tilePtr);
+typedef bool (__fastcall *PickaxeCanDestroySpecial_fn)(void* thisPtr, void* tilePtr);
+typedef bool (__fastcall *PlayerCanDestroy_fn)(void* thisPtr, void* tilePtr);
 typedef bool (__fastcall *GameModeUseItem_fn)(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
 typedef void (__fastcall *MinecraftSetLevel_fn)(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
 typedef bool (__fastcall *LevelAddEntity_fn)(void* thisPtr, void* entitySharedPtr);
@@ -68,6 +71,11 @@ namespace GameHooks
     extern ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock;
     extern ItemMineBlock_fn       Original_ItemMineBlock;
     extern ItemMineBlock_fn       Original_DiggerItemMineBlock;
+    extern PickaxeGetDestroySpeed_fn Original_PickaxeItemGetDestroySpeed;
+    extern PickaxeCanDestroySpecial_fn Original_PickaxeItemCanDestroySpecial;
+    extern PickaxeGetDestroySpeed_fn Original_ShovelItemGetDestroySpeed;
+    extern PickaxeCanDestroySpecial_fn Original_ShovelItemCanDestroySpecial;
+    extern PlayerCanDestroy_fn Original_PlayerCanDestroy;
     extern GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem;
     extern GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem;
     extern MinecraftSetLevel_fn   Original_MinecraftSetLevel;
@@ -103,6 +111,11 @@ namespace GameHooks
     void __fastcall Hooked_ItemInstanceMineBlock(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
     bool __fastcall Hooked_ItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
     bool __fastcall Hooked_DiggerItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
+    float __fastcall Hooked_PickaxeItemGetDestroySpeed(void* thisPtr, void* itemInstanceSharedPtr, void* tilePtr);
+    bool __fastcall Hooked_PickaxeItemCanDestroySpecial(void* thisPtr, void* tilePtr);
+    float __fastcall Hooked_ShovelItemGetDestroySpeed(void* thisPtr, void* itemInstanceSharedPtr, void* tilePtr);
+    bool __fastcall Hooked_ShovelItemCanDestroySpecial(void* thisPtr, void* tilePtr);
+    bool __fastcall Hooked_PlayerCanDestroy(void* thisPtr, void* tilePtr);
     bool __fastcall Hooked_ServerPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
     bool __fastcall Hooked_MultiPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
     void __fastcall Hooked_MinecraftSetLevel(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
@@ -114,6 +127,7 @@ namespace GameHooks
     float __fastcall Hooked_StitchedGetV0(void* thisPtr, bool adjust);
     float __fastcall Hooked_StitchedGetV1(void* thisPtr, bool adjust);
     void SetAtlasLocationPointers(void* blocksLocation, void* itemsLocation);
+    void SetTileTilesArray(void* tilesArray);
     void SetSummonSymbols(void* levelAddEntity,
                           void* entityIoNewById,
                           void* entityMoveTo,

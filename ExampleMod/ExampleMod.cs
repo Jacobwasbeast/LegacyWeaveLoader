@@ -10,18 +10,14 @@ namespace ExampleMod;
 public class ExampleMod : IMod
 {
     public static RegisteredBlock? RubyOre;
+    public static RegisteredBlock? Orichalcum;
     public static RegisteredItem? Ruby;
     public static RegisteredItem? RubyPickaxeItem;
+    public static RegisteredItem? RubyShovelItem;
+    public static RegisteredItem? RubyHoeItem;
+    public static RegisteredItem? RubyAxeItem;
+    public static RegisteredItem? RubySwordItem;
     public static RegisteredItem? RubyWandItem;
-
-    private sealed class RubyPickaxe : PickaxeItem
-    {
-        public override MineBlockResult OnMineBlock(MineBlockContext context)
-        {
-            Logger.Info($"RubyPickaxe mined tile={context.TileId} at ({context.X}, {context.Y}, {context.Z})");
-            return base.OnMineBlock(context);
-        }
-    }
 
     private sealed class RubyWand : Item
     {
@@ -70,6 +66,31 @@ public class ExampleMod : IMod
         }
     }
 
+    private sealed class RubyShovel : ShovelItem
+    {
+    }
+
+    private sealed class RubyPickaxe : PickaxeItem
+    {
+        public override MineBlockResult OnMineBlock(MineBlockContext context)
+        {
+            Logger.Info($"RubyPickaxe mined tile={context.TileId} at ({context.X}, {context.Y}, {context.Z})");
+            return base.OnMineBlock(context);
+        }
+    }
+
+    private sealed class RubyAxe : AxeItem
+    {
+    }
+
+    private sealed class RubyHoe : HoeItem
+    {
+    }
+
+    private sealed class RubySword : SwordItem
+    {
+    }
+
     public void OnInitialize()
     {
         RubyOre = Registry.Block.Register("examplemod:ruby_ore",
@@ -80,6 +101,20 @@ public class ExampleMod : IMod
                 .Sound(SoundType.Stone)
                 .Icon("examplemod:ruby_ore")  // From assets/blocks/ruby_ore.png
                 .Name("Ruby Ore")
+                .RequiredHarvestLevel(2)
+                .RequiredTool(ToolType.Pickaxe)
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        Orichalcum = Registry.Block.Register("examplemod:orichalcum_ore",
+            new BlockProperties()
+                .Material(MaterialType.Metal)
+                .Hardness(5.0f)
+                .Resistance(30f)
+                .Sound(SoundType.Metal)
+                .Icon("examplemod:orichalcum_ore")  // From assets/blocks/orichalcum.png
+                .Name("Orichalcum Ore")
+                .RequiredHarvestLevel(4)
+                .RequiredTool(ToolType.Pickaxe)
                 .InCreativeTab(CreativeTab.BuildingBlocks));
 
         Ruby = Registry.Item.Register("examplemod:ruby",
@@ -89,12 +124,55 @@ public class ExampleMod : IMod
                 .Name("Ruby")
                 .InCreativeTab(CreativeTab.Materials));
 
-        RubyPickaxeItem = Registry.Item.Register("examplemod:ruby_pickaxe", new RubyPickaxe(),
+        Registry.Item.RegisterToolMaterial("examplemod:ruby_material",
+            new ToolMaterialDefinition()
+                .BaseTier(ToolTier.Diamond)
+                .HarvestLevel(4)
+                .DestroySpeed(10.0f));
+
+        RubySwordItem = Registry.Item.Register("examplemod:ruby_sword", new RubySword { CustomMaterialId = "examplemod:ruby_material" },
             new ItemProperties()
                 .MaxStackSize(1)
                 .MaxDamage(512)
+                .AttackDamage(8.0f)
+                .Icon("examplemod:ruby_sword")
+                .Name("Ruby Sword")
+                .InCreativeTab(CreativeTab.ToolsAndWeapons));
+
+        RubyShovelItem = Registry.Item.Register("examplemod:ruby_shovel", new RubyShovel { CustomMaterialId = "examplemod:ruby_material" },
+            new ItemProperties()
+                .MaxStackSize(1)
+                .MaxDamage(512)
+                .AttackDamage(4.5f)
+                .Icon("examplemod:ruby_shovel")
+                .Name("Ruby Shovel")
+                .InCreativeTab(CreativeTab.ToolsAndWeapons));
+
+        RubyPickaxeItem = Registry.Item.Register("examplemod:ruby_pickaxe", new RubyPickaxe { CustomMaterialId = "examplemod:ruby_material" },
+            new ItemProperties()
+                .MaxStackSize(1)
+                .MaxDamage(512)
+                .AttackDamage(5.0f)
                 .Icon("examplemod:ruby_pickaxe")  // From assets/items/ruby_pickaxe.png
                 .Name("Ruby Pickaxe")
+                .InCreativeTab(CreativeTab.ToolsAndWeapons));
+
+        RubyAxeItem = Registry.Item.Register("examplemod:ruby_axe", new RubyAxe { CustomMaterialId = "examplemod:ruby_material" },
+            new ItemProperties()
+                .MaxStackSize(1)
+                .MaxDamage(512)
+                .AttackDamage(7.0f)
+                .Icon("examplemod:ruby_axe")
+                .Name("Ruby Axe")
+                .InCreativeTab(CreativeTab.ToolsAndWeapons));
+
+        RubyHoeItem = Registry.Item.Register("examplemod:ruby_hoe", new RubyHoe { CustomMaterialId = "examplemod:ruby_material" },
+            new ItemProperties()
+                .MaxStackSize(1)
+                .MaxDamage(512)
+                .AttackDamage(1.0f)
+                .Icon("examplemod:ruby_hoe")
+                .Name("Ruby Hoe")
                 .InCreativeTab(CreativeTab.ToolsAndWeapons));
 
         RubyWandItem = Registry.Item.Register("examplemod:ruby_wand", new RubyWand(),

@@ -63,9 +63,31 @@ public enum ToolTier
 /// Managed pickaxe base class.
 /// Override callbacks to customize behavior.
 /// </summary>
-public class PickaxeItem : Item
+public abstract class ToolItem : Item
 {
     public ToolTier Tier { get; init; } = ToolTier.Diamond;
+    public Identifier? CustomMaterialId { get; init; }
+}
+
+public class PickaxeItem : ToolItem
+{
+    public Identifier? CustomTierId { get; init; }
+}
+
+public class ShovelItem : ToolItem
+{
+}
+
+public class HoeItem : ToolItem
+{
+}
+
+public class AxeItem : ToolItem
+{
+}
+
+public class SwordItem : ToolItem
+{
 }
 
 /// <summary>

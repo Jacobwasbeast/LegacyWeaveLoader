@@ -26,4 +26,13 @@ namespace GameObjectFactory
     // maxDamage: if > 0, overrides the tier default durability.
     bool CreatePickaxeItem(int itemId, int tier, int maxDamage,
                            const wchar_t* iconName, int descriptionId = -1);
+    bool CreateShovelItem(int itemId, int tier, int maxDamage,
+                          const wchar_t* iconName, int descriptionId = -1);
+    bool CreateHoeItem(int itemId, int tier, int maxDamage,
+                       const wchar_t* iconName, int descriptionId = -1);
+    bool CreateAxeItem(int itemId, int tier, int maxDamage,
+                       const wchar_t* iconName, int descriptionId = -1);
+    bool CreateSwordItem(int itemId, int tier, int maxDamage,
+                         const wchar_t* iconName, int descriptionId = -1);
+    void* FindItem(int itemId);
 }

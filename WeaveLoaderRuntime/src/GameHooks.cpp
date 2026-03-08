@@ -4,6 +4,9 @@
 #include "MainMenuOverlay.h"
 #include "ModStrings.h"
 #include "ModAtlas.h"
+#include "CustomPickaxeRegistry.h"
+#include "CustomToolMaterialRegistry.h"
+#include "CustomBlockRegistry.h"
 #include "LogUtil.h"
 #include <Windows.h>
 #include <string>
@@ -40,6 +43,11 @@ namespace GameHooks
     ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock = nullptr;
     ItemMineBlock_fn       Original_ItemMineBlock = nullptr;
     ItemMineBlock_fn       Original_DiggerItemMineBlock = nullptr;
+    PickaxeGetDestroySpeed_fn Original_PickaxeItemGetDestroySpeed = nullptr;
+    PickaxeCanDestroySpecial_fn Original_PickaxeItemCanDestroySpecial = nullptr;
+    PickaxeGetDestroySpeed_fn Original_ShovelItemGetDestroySpeed = nullptr;
+    PickaxeCanDestroySpecial_fn Original_ShovelItemCanDestroySpecial = nullptr;
+    PlayerCanDestroy_fn Original_PlayerCanDestroy = nullptr;
     GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem = nullptr;
     GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem = nullptr;
     MinecraftSetLevel_fn   Original_MinecraftSetLevel = nullptr;
@@ -66,6 +74,8 @@ namespace GameHooks
     // Verified from compiled Player::inventory accesses in this game build.
     static constexpr ptrdiff_t kPlayerInventoryOffset = 0x340;
     static constexpr ptrdiff_t kLevelIsClientSideOffset = 0x268;
+    static constexpr ptrdiff_t kItemIdOffset = 0x20;
+    static constexpr ptrdiff_t kTileIdOffset = 0x28;
     static constexpr ptrdiff_t kEntityXOffset = 0x78;
     static constexpr ptrdiff_t kEntityYOffset = 0x80;
     static constexpr ptrdiff_t kEntityZOffset = 0x88;
@@ -78,6 +88,7 @@ namespace GameHooks
     static void* s_textureAtlasLocationItems = nullptr;
     static int s_textureAtlasIdBlocks = -1;
     static int s_textureAtlasIdItems = -1;
+    static void* s_tileTilesArray = nullptr;
     static thread_local bool s_inLoadTextureByNameHook = false;
     static thread_local bool s_hasForcedBillboardRoute = false;
     static thread_local int s_forcedBillboardAtlas = -1;
@@ -758,6 +769,11 @@ namespace GameHooks
         LogUtil::Log("[WeaveLoader] Atlas IDs: blocks=%d items=%d", s_textureAtlasIdBlocks, s_textureAtlasIdItems);
     }
 
+    void SetTileTilesArray(void* tilesArray)
+    {
+        s_tileTilesArray = tilesArray;
+    }
+
     static bool TryReadVec3(void* vecPtr, double& x, double& y, double& z)
     {
         if (!IsReadableRange(vecPtr, sizeof(double) * 3))
@@ -1204,6 +1220,232 @@ namespace GameHooks
 
         if (Original_DiggerItemMineBlock)
             return Original_DiggerItemMineBlock(thisPtr, itemInstanceSharedPtr, level, tile, x, y, z, ownerSharedPtr);
+        return false;
+    }
+
+    static bool TryReadItemIdFromPickaxe(void* pickaxeItemPtr, int& outItemId)
+    {
+        if (!pickaxeItemPtr || !IsReadableRange(pickaxeItemPtr, kItemIdOffset + sizeof(int)))
+            return false;
+        int itemId = *reinterpret_cast<const int*>(static_cast<const char*>(pickaxeItemPtr) + kItemIdOffset);
+        if (itemId >= 0 && itemId < 32000)
+        {
+            outItemId = itemId;
+            return true;
+        }
+        return false;
+    }
+
+    static constexpr int TILE_NUM_COUNT = 4096;
+
+    static bool TryReadTileId(void* tilePtr, int& outTileId)
+    {
+        if (!tilePtr)
+            return false;
+        if (IsReadableRange(tilePtr, kTileIdOffset + sizeof(int)))
+        {
+            int id = *reinterpret_cast<const int*>(static_cast<const char*>(tilePtr) + kTileIdOffset);
+            if (id >= 0 && id < TILE_NUM_COUNT)
+            {
+                outTileId = id;
+                return true;
+            }
+        }
+        // Fallback: resolve via Tile::tiles (Tile** - pointer to array). Must dereference once.
+        if (s_tileTilesArray && IsReadableRange(s_tileTilesArray, sizeof(void*)))
+        {
+            const void* arrayPtr = *reinterpret_cast<const void* const*>(s_tileTilesArray);
+            if (arrayPtr && IsReadableRange(arrayPtr, TILE_NUM_COUNT * sizeof(void*)))
+            {
+                const void* const* tiles = reinterpret_cast<const void* const*>(arrayPtr);
+                for (int i = 0; i < TILE_NUM_COUNT; i++)
+                {
+                    if (tiles[i] == tilePtr)
+                    {
+                        outTileId = i;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    static int GetToolHarvestLevel(void* diggerItemPtr, int itemId)
+    {
+        const CustomToolMaterialRegistry::Definition* def = CustomToolMaterialRegistry::Find(itemId);
+        if (def)
+            return def->harvestLevel;
+        if (!diggerItemPtr || !IsReadableRange(diggerItemPtr, 0xA8 + sizeof(void*)))
+            return -1;
+        const void* tierPtr = *reinterpret_cast<const void* const*>(static_cast<const char*>(diggerItemPtr) + 0xA8);
+        if (!tierPtr || !IsReadableRange(tierPtr, sizeof(int)))
+            return -1;
+        return *reinterpret_cast<const int*>(tierPtr);
+    }
+
+    static float GetToolDestroySpeed(void* diggerItemPtr, int itemId)
+    {
+        const CustomToolMaterialRegistry::Definition* def = CustomToolMaterialRegistry::Find(itemId);
+        if (def)
+            return def->destroySpeed;
+        if (!diggerItemPtr || !IsReadableRange(static_cast<const char*>(diggerItemPtr) + 0xA0, sizeof(float)))
+            return 1.0f;
+        return *reinterpret_cast<const float*>(static_cast<const char*>(diggerItemPtr) + 0xA0);
+    }
+
+    float __fastcall Hooked_PickaxeItemGetDestroySpeed(void* thisPtr, void* itemInstanceSharedPtr, void* tilePtr)
+    {
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        int itemId = 0;
+        if (!TryReadItemId(itemInstancePtr, itemId))
+        {
+            if (Original_PickaxeItemGetDestroySpeed)
+                return Original_PickaxeItemGetDestroySpeed(thisPtr, itemInstanceSharedPtr, tilePtr);
+            return 1.0f;
+        }
+
+        int tileId = 0;
+        if (tilePtr && TryReadTileId(tilePtr, tileId))
+        {
+            const CustomBlockRegistry::Definition* blockDef = CustomBlockRegistry::Find(tileId);
+            if (blockDef && blockDef->requiredTool == CustomBlockRegistry::ToolType::Pickaxe)
+            {
+                int harvestLevel = GetToolHarvestLevel(thisPtr, itemId);
+                if (harvestLevel >= 0 &&
+                    (blockDef->requiredHarvestLevel < 0 || harvestLevel >= blockDef->requiredHarvestLevel))
+                {
+                    return GetToolDestroySpeed(thisPtr, itemId);
+                }
+                // Block requires pickaxe but harvest level insufficient - return slow speed
+                return 1.0f;
+            }
+        }
+
+        if (Original_PickaxeItemGetDestroySpeed)
+            return Original_PickaxeItemGetDestroySpeed(thisPtr, itemInstanceSharedPtr, tilePtr);
+        return 1.0f;
+    }
+
+    bool __fastcall Hooked_PickaxeItemCanDestroySpecial(void* thisPtr, void* tilePtr)
+    {
+        int itemId = 0;
+        if (!TryReadItemIdFromPickaxe(thisPtr, itemId))
+        {
+            if (Original_PickaxeItemCanDestroySpecial)
+                return Original_PickaxeItemCanDestroySpecial(thisPtr, tilePtr);
+            return false;
+        }
+
+        int tileId = 0;
+        if (tilePtr && TryReadTileId(tilePtr, tileId))
+        {
+            const CustomBlockRegistry::Definition* blockDef = CustomBlockRegistry::Find(tileId);
+            if (blockDef && blockDef->requiredTool == CustomBlockRegistry::ToolType::Pickaxe)
+            {
+                int harvestLevel = GetToolHarvestLevel(thisPtr, itemId);
+                if (harvestLevel >= 0 &&
+                    (blockDef->requiredHarvestLevel < 0 || harvestLevel >= blockDef->requiredHarvestLevel))
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        if (Original_PickaxeItemCanDestroySpecial)
+            return Original_PickaxeItemCanDestroySpecial(thisPtr, tilePtr);
+        return false;
+    }
+
+    float __fastcall Hooked_ShovelItemGetDestroySpeed(void* thisPtr, void* itemInstanceSharedPtr, void* tilePtr)
+    {
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        int itemId = 0;
+        if (!TryReadItemId(itemInstancePtr, itemId))
+        {
+            if (Original_ShovelItemGetDestroySpeed)
+                return Original_ShovelItemGetDestroySpeed(thisPtr, itemInstanceSharedPtr, tilePtr);
+            return 1.0f;
+        }
+
+        int tileId = 0;
+        if (tilePtr && TryReadTileId(tilePtr, tileId))
+        {
+            const CustomBlockRegistry::Definition* blockDef = CustomBlockRegistry::Find(tileId);
+            if (blockDef && blockDef->requiredTool == CustomBlockRegistry::ToolType::Shovel)
+            {
+                int harvestLevel = GetToolHarvestLevel(thisPtr, itemId);
+                if (harvestLevel >= 0 &&
+                    (blockDef->requiredHarvestLevel < 0 || harvestLevel >= blockDef->requiredHarvestLevel))
+                {
+                    return GetToolDestroySpeed(thisPtr, itemId);
+                }
+                return 1.0f;
+            }
+        }
+
+        if (Original_ShovelItemGetDestroySpeed)
+            return Original_ShovelItemGetDestroySpeed(thisPtr, itemInstanceSharedPtr, tilePtr);
+        return 1.0f;
+    }
+
+    bool __fastcall Hooked_ShovelItemCanDestroySpecial(void* thisPtr, void* tilePtr)
+    {
+        int itemId = 0;
+        if (!TryReadItemIdFromPickaxe(thisPtr, itemId))
+        {
+            if (Original_ShovelItemCanDestroySpecial)
+                return Original_ShovelItemCanDestroySpecial(thisPtr, tilePtr);
+            return false;
+        }
+
+        int tileId = 0;
+        if (tilePtr && TryReadTileId(tilePtr, tileId))
+        {
+            const CustomBlockRegistry::Definition* blockDef = CustomBlockRegistry::Find(tileId);
+            if (blockDef && blockDef->requiredTool == CustomBlockRegistry::ToolType::Shovel)
+            {
+                int harvestLevel = GetToolHarvestLevel(thisPtr, itemId);
+                if (harvestLevel >= 0 &&
+                    (blockDef->requiredHarvestLevel < 0 || harvestLevel >= blockDef->requiredHarvestLevel))
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        if (Original_ShovelItemCanDestroySpecial)
+            return Original_ShovelItemCanDestroySpecial(thisPtr, tilePtr);
+        return false;
+    }
+
+    // Inventory layout: items.data at +0x8, selected at +0x28. shared_ptr is 16 bytes.
+    static void* GetSelectedItemInstanceFromPlayer(void* playerPtr)
+    {
+        void* inv = FindInventoryPtrFromPlayer(playerPtr);
+        if (!inv || !IsReadableRange(inv, 0x30))
+            return nullptr;
+        void* itemsData = *reinterpret_cast<void* const*>(static_cast<const char*>(inv) + 0x8);
+        int selected = *reinterpret_cast<const int*>(static_cast<const char*>(inv) + 0x28);
+        if (!itemsData || selected < 0 || selected >= 36)
+            return nullptr;
+        // shared_ptr<ItemInstance> at itemsData[selected]; raw ptr is first 8 bytes
+        const char* slotPtr = static_cast<const char*>(itemsData) + selected * 16;
+        if (!IsReadableRange(slotPtr, 8))
+            return nullptr;
+        return *reinterpret_cast<void* const*>(slotPtr);
+    }
+
+    bool __fastcall Hooked_PlayerCanDestroy(void* thisPtr, void* tilePtr)
+    {
+        // For pickaxe harvest rules, Inventory::canDestroy -> ItemInstance::canDestroySpecial
+        // already gives the correct source behavior:
+        // proper tool/tier => normal speed + drops
+        // insufficient tool/tier => slow break + no drops
+        if (Original_PlayerCanDestroy)
+            return Original_PlayerCanDestroy(thisPtr, tilePtr);
         return false;
     }
 

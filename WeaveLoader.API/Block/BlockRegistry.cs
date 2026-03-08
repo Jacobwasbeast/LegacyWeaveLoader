@@ -46,7 +46,9 @@ public static class BlockRegistry
             properties.IconValue,
             properties.LightEmissionValue,
             properties.LightBlockValue,
-            properties.NameValue ?? "");
+            properties.NameValue ?? "",
+            properties.RequiredHarvestLevelValue,
+            (int)properties.RequiredToolValue);
 
         if (numericId < 0)
             throw new InvalidOperationException($"Failed to register block '{id}'. No free IDs or invalid parameters.");

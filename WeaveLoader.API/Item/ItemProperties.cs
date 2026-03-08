@@ -7,6 +7,7 @@ public class ItemProperties
 {
     internal int MaxStackSizeValue = 64;
     internal int MaxDamageValue = 0;
+    internal float AttackDamageValue = 0.0f;
     internal string IconValue = "";
     internal CreativeTab CreativeTabValue = CreativeTab.None;
     internal string? NameValue;
@@ -20,6 +21,8 @@ public class ItemProperties
     /// makes the item damageable with a durability bar.
     /// </summary>
     public ItemProperties MaxDamage(int damage) { MaxDamageValue = damage; MaxStackSizeValue = 1; return this; }
+    /// <summary>Override the native attack damage value for tool items.</summary>
+    public ItemProperties AttackDamage(float damage) { AttackDamageValue = damage; return this; }
     public ItemProperties InCreativeTab(CreativeTab tab) { CreativeTabValue = tab; return this; }
     /// <summary>Display name shown in-game (e.g. "Ruby"). Used for localization.</summary>
     public ItemProperties Name(string displayName) { NameValue = displayName; return this; }

@@ -35,6 +35,11 @@ public:
     void* pItemInstanceMineBlock = nullptr; // ItemInstance::mineBlock(Level*,int,int,int,int,shared_ptr<Player>)
     void* pItemMineBlock = nullptr;        // Item::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
     void* pDiggerItemMineBlock = nullptr;  // DiggerItem::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
+    void* pPickaxeItemGetDestroySpeed = nullptr; // PickaxeItem::getDestroySpeed(shared_ptr<ItemInstance>,Tile*)
+    void* pPickaxeItemCanDestroySpecial = nullptr; // PickaxeItem::canDestroySpecial(Tile*)
+    void* pShovelItemGetDestroySpeed = nullptr; // ShovelItem::getDestroySpeed(shared_ptr<ItemInstance>,Tile*)
+    void* pShovelItemCanDestroySpecial = nullptr; // ShovelItem::canDestroySpecial(Tile*)
+    void* pPlayerCanDestroy = nullptr;             // Player::canDestroy(Tile*)
     void* pServerPlayerGameModeUseItem = nullptr; // ServerPlayerGameMode::useItem(shared_ptr<Player>,Level*,shared_ptr<ItemInstance>,bool)
     void* pMultiPlayerGameModeUseItem = nullptr;  // MultiPlayerGameMode::useItem(shared_ptr<Player>,Level*,shared_ptr<ItemInstance>,bool)
     void* pTexturesBindTextureResource = nullptr; // Textures::bindTexture(ResourceLocation*)
@@ -58,6 +63,7 @@ public:
     void* pAbstractContainerMenuBroadcastChanges = nullptr; // AbstractContainerMenu::broadcastChanges()
     void* pTextureAtlasLocationBlocks = nullptr; // TextureAtlas::LOCATION_BLOCKS
     void* pTextureAtlasLocationItems = nullptr;  // TextureAtlas::LOCATION_ITEMS
+    void* pTileTiles = nullptr;                  // Tile::tiles (Tile*[]) for tile id lookup
 
 private:
     uintptr_t m_moduleBase = 0;

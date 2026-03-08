@@ -4,6 +4,9 @@
 #include "GameObjectFactory.h"
 #include "FurnaceRecipeRegistry.h"
 #include "GameHooks.h"
+#include "CustomPickaxeRegistry.h"
+#include "CustomToolMaterialRegistry.h"
+#include "CustomBlockRegistry.h"
 #include "ModStrings.h"
 #include "LogUtil.h"
 #include <Windows.h>
@@ -45,7 +48,9 @@ int native_register_block(
     const char* iconName,
     float lightEmission,
     int lightBlock,
-    const char* displayName)
+    const char* displayName,
+    int requiredHarvestLevel,
+    int requiredTool)
 {
     if (!namespacedId) return -1;
 
@@ -73,6 +78,11 @@ int native_register_block(
                                         soundType, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
     {
         LogUtil::Log("[WeaveLoader] Warning: failed to create game Tile for block '%s' id=%d", namespacedId, id);
+    }
+
+    if (requiredHarvestLevel >= 0 || requiredTool != 0)
+    {
+        CustomBlockRegistry::Register(id, requiredHarvestLevel, requiredTool);
     }
 
     return id;
@@ -152,6 +162,171 @@ int native_register_pickaxe_item(
     }
 
     return id;
+}
+
+int native_register_shovel_item(
+    const char* namespacedId,
+    int tier,
+    int maxDamage,
+    const char* iconName,
+    const char* displayName)
+{
+    if (!namespacedId) return -1;
+
+    int id = IdRegistry::Instance().Register(IdRegistry::Type::Item, namespacedId);
+    if (id < 0) return -1;
+
+    std::wstring wIcon = Utf8ToWide(iconName);
+    int descId = -1;
+    if (displayName && displayName[0])
+    {
+        descId = ModStrings::AllocateId();
+        std::wstring wName = Utf8ToWide(displayName);
+        ModStrings::Register(descId, wName.c_str());
+    }
+
+    if (!GameObjectFactory::CreateShovelItem(id, tier, maxDamage, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+        LogUtil::Log("[WeaveLoader] Warning: failed to create native ShovelItem for '%s' id=%d", namespacedId, id);
+
+    return id;
+}
+
+int native_register_hoe_item(
+    const char* namespacedId,
+    int tier,
+    int maxDamage,
+    const char* iconName,
+    const char* displayName)
+{
+    if (!namespacedId) return -1;
+
+    int id = IdRegistry::Instance().Register(IdRegistry::Type::Item, namespacedId);
+    if (id < 0) return -1;
+
+    std::wstring wIcon = Utf8ToWide(iconName);
+    int descId = -1;
+    if (displayName && displayName[0])
+    {
+        descId = ModStrings::AllocateId();
+        std::wstring wName = Utf8ToWide(displayName);
+        ModStrings::Register(descId, wName.c_str());
+    }
+
+    if (!GameObjectFactory::CreateHoeItem(id, tier, maxDamage, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+        LogUtil::Log("[WeaveLoader] Warning: failed to create native HoeItem for '%s' id=%d", namespacedId, id);
+
+    return id;
+}
+
+int native_register_axe_item(
+    const char* namespacedId,
+    int tier,
+    int maxDamage,
+    const char* iconName,
+    const char* displayName)
+{
+    if (!namespacedId) return -1;
+
+    int id = IdRegistry::Instance().Register(IdRegistry::Type::Item, namespacedId);
+    if (id < 0) return -1;
+
+    std::wstring wIcon = Utf8ToWide(iconName);
+    int descId = -1;
+    if (displayName && displayName[0])
+    {
+        descId = ModStrings::AllocateId();
+        std::wstring wName = Utf8ToWide(displayName);
+        ModStrings::Register(descId, wName.c_str());
+    }
+
+    if (!GameObjectFactory::CreateAxeItem(id, tier, maxDamage, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+        LogUtil::Log("[WeaveLoader] Warning: failed to create native HatchetItem for '%s' id=%d", namespacedId, id);
+
+    return id;
+}
+
+int native_register_sword_item(
+    const char* namespacedId,
+    int tier,
+    int maxDamage,
+    const char* iconName,
+    const char* displayName)
+{
+    if (!namespacedId) return -1;
+
+    int id = IdRegistry::Instance().Register(IdRegistry::Type::Item, namespacedId);
+    if (id < 0) return -1;
+
+    std::wstring wIcon = Utf8ToWide(iconName);
+    int descId = -1;
+    if (displayName && displayName[0])
+    {
+        descId = ModStrings::AllocateId();
+        std::wstring wName = Utf8ToWide(displayName);
+        ModStrings::Register(descId, wName.c_str());
+    }
+
+    if (!GameObjectFactory::CreateSwordItem(id, tier, maxDamage, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+        LogUtil::Log("[WeaveLoader] Warning: failed to create native WeaponItem for '%s' id=%d", namespacedId, id);
+
+    return id;
+}
+
+int native_configure_custom_pickaxe_item(
+    int numericItemId,
+    int harvestLevel,
+    float destroySpeed)
+{
+    return native_configure_custom_tool_item(
+        numericItemId,
+        static_cast<int>(CustomToolMaterialRegistry::ToolKind::Pickaxe),
+        harvestLevel,
+        destroySpeed,
+        0.0f);
+}
+
+int native_configure_custom_tool_item(
+    int numericItemId,
+    int toolKind,
+    int harvestLevel,
+    float destroySpeed,
+    float attackDamage)
+{
+    if (numericItemId < 0 || harvestLevel < 0 || destroySpeed <= 0.0f)
+        return 0;
+
+    const auto kind = static_cast<CustomToolMaterialRegistry::ToolKind>(toolKind);
+    CustomToolMaterialRegistry::Register(numericItemId, kind, harvestLevel, destroySpeed, attackDamage);
+    if (kind == CustomToolMaterialRegistry::ToolKind::Pickaxe)
+    {
+        CustomPickaxeRegistry::Register(numericItemId, harvestLevel, destroySpeed);
+    }
+
+    void* itemPtr = GameObjectFactory::FindItem(numericItemId);
+    if (itemPtr)
+    {
+        switch (kind)
+        {
+        case CustomToolMaterialRegistry::ToolKind::Pickaxe:
+        case CustomToolMaterialRegistry::ToolKind::Shovel:
+        case CustomToolMaterialRegistry::ToolKind::Axe:
+            if (destroySpeed > 0.0f)
+                *reinterpret_cast<float*>(static_cast<char*>(itemPtr) + 0xA0) = destroySpeed;
+            if (attackDamage > 0.0f)
+                *reinterpret_cast<float*>(static_cast<char*>(itemPtr) + 0xA4) = attackDamage;
+            break;
+        case CustomToolMaterialRegistry::ToolKind::Sword:
+            if (attackDamage > 0.0f)
+                *reinterpret_cast<float*>(static_cast<char*>(itemPtr) + 0x98) = attackDamage;
+            break;
+        case CustomToolMaterialRegistry::ToolKind::Hoe:
+            break;
+        }
+    }
+
+    LogUtil::Log("[WeaveLoader] Configured custom tool item id=%d (kind=%d harvest=%d speed=%.2f attack=%.2f)",
+                 numericItemId, toolKind, harvestLevel, destroySpeed, attackDamage);
+    return 1;
 }
 
 int native_allocate_description_id()

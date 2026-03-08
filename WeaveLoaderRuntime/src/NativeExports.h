@@ -14,7 +14,9 @@ extern "C"
         const char* iconName,
         float lightEmission,
         int lightBlock,
-        const char* displayName);
+        const char* displayName,
+        int requiredHarvestLevel,
+        int requiredTool);
 
     __declspec(dllexport) int native_register_item(
         const char* namespacedId,
@@ -29,6 +31,41 @@ extern "C"
         int maxDamage,
         const char* iconName,
         const char* displayName);
+    __declspec(dllexport) int native_register_shovel_item(
+        const char* namespacedId,
+        int tier,
+        int maxDamage,
+        const char* iconName,
+        const char* displayName);
+    __declspec(dllexport) int native_register_hoe_item(
+        const char* namespacedId,
+        int tier,
+        int maxDamage,
+        const char* iconName,
+        const char* displayName);
+    __declspec(dllexport) int native_register_axe_item(
+        const char* namespacedId,
+        int tier,
+        int maxDamage,
+        const char* iconName,
+        const char* displayName);
+    __declspec(dllexport) int native_register_sword_item(
+        const char* namespacedId,
+        int tier,
+        int maxDamage,
+        const char* iconName,
+        const char* displayName);
+
+    __declspec(dllexport) int native_configure_custom_pickaxe_item(
+        int numericItemId,
+        int harvestLevel,
+        float destroySpeed);
+    __declspec(dllexport) int native_configure_custom_tool_item(
+        int numericItemId,
+        int toolKind,
+        int harvestLevel,
+        float destroySpeed,
+        float attackDamage);
 
     __declspec(dllexport) int native_allocate_description_id();
     __declspec(dllexport) void native_register_string(int descriptionId, const char* displayName);

@@ -1,5 +1,20 @@
 namespace WeaveLoader.API.Block;
 
+/// <summary>
+/// Tool type required to harvest a block. Used with <see cref="BlockProperties.RequiredTool"/>.
+/// </summary>
+public enum ToolType
+{
+    /// <summary>No specific tool required; any tool or hand can harvest.</summary>
+    None = 0,
+    /// <summary>Requires a pickaxe.</summary>
+    Pickaxe = 1,
+    /// <summary>Requires an axe.</summary>
+    Axe = 2,
+    /// <summary>Requires a shovel.</summary>
+    Shovel = 3,
+}
+
 public enum MaterialType
 {
     Air = 0,
@@ -48,6 +63,8 @@ public class BlockProperties
     internal int LightBlockValue = 255;
     internal CreativeTab CreativeTabValue = CreativeTab.None;
     internal string? NameValue;
+    internal int RequiredHarvestLevelValue = -1;
+    internal ToolType RequiredToolValue = ToolType.None;
 
     public BlockProperties Material(MaterialType material) { MaterialValue = material; return this; }
     public BlockProperties Hardness(float hardness) { HardnessValue = hardness; return this; }
@@ -61,4 +78,8 @@ public class BlockProperties
     public BlockProperties InCreativeTab(CreativeTab tab) { CreativeTabValue = tab; return this; }
     /// <summary>Display name shown in-game (e.g. "Ruby Ore"). Used for localization.</summary>
     public BlockProperties Name(string displayName) { NameValue = displayName; return this; }
+    /// <summary>Minimum harvest level required to properly mine this block (e.g. 3 for obsidian). -1 means no requirement.</summary>
+    public BlockProperties RequiredHarvestLevel(int level) { RequiredHarvestLevelValue = level; return this; }
+    /// <summary>Tool type required to harvest this block (e.g. Pickaxe for stone-like blocks).</summary>
+    public BlockProperties RequiredTool(ToolType tool) { RequiredToolValue = tool; return this; }
 }

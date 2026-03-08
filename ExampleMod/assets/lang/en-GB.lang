@@ -4,4 +4,11 @@
 # This file documents the expected format for future multi-locale support.
 
 block.examplemod.ruby_ore=Ruby Ore
+block.examplemod.orichalcum_ore=Orichalcum Ore
 item.examplemod.ruby=Ruby
+item.examplemod.ruby_sword=Ruby Sword
+item.examplemod.ruby_shovel=Ruby Shovel
+item.examplemod.ruby_pickaxe=Ruby Pickaxe
+item.examplemod.ruby_axe=Ruby Axe
+item.examplemod.ruby_hoe=Ruby Hoe
+item.examplemod.ruby_wand=Ruby Wand

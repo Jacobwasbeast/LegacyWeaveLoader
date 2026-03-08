@@ -20,7 +20,9 @@ internal static class NativeInterop
         string iconName,
         float lightEmission,
         int lightBlock,
-        string displayName);
+        string displayName,
+        int requiredHarvestLevel,
+        int requiredTool);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern int native_register_item(
@@ -37,6 +39,52 @@ internal static class NativeInterop
         int maxDamage,
         string iconName,
         string displayName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_shovel_item(
+        string namespacedId,
+        int tier,
+        int maxDamage,
+        string iconName,
+        string displayName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_hoe_item(
+        string namespacedId,
+        int tier,
+        int maxDamage,
+        string iconName,
+        string displayName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_axe_item(
+        string namespacedId,
+        int tier,
+        int maxDamage,
+        string iconName,
+        string displayName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_sword_item(
+        string namespacedId,
+        int tier,
+        int maxDamage,
+        string iconName,
+        string displayName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_configure_custom_pickaxe_item(
+        int numericItemId,
+        int harvestLevel,
+        float destroySpeed);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_configure_custom_tool_item(
+        int numericItemId,
+        int toolKind,
+        int harvestLevel,
+        float destroySpeed,
+        float attackDamage);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern int native_allocate_description_id();
