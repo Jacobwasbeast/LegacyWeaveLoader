@@ -26,6 +26,12 @@ public:
     void* pItemInstanceGetIcon = nullptr;  // ItemInstance::getIcon()
     void* pEntityRendererBindTextureResource = nullptr; // EntityRenderer::bindTexture(ResourceLocation*)
     void* pItemRendererRenderItemBillboard = nullptr; // ItemRenderer::renderItemBillboard(shared_ptr<ItemEntity>,Icon*,...)
+    void* pCompassTextureCycleFrames = nullptr; // CompassTexture::cycleFrames()
+    void* pClockTextureCycleFrames = nullptr; // ClockTexture::cycleFrames()
+    void* pCompassTextureGetSourceWidth = nullptr; // CompassTexture::getSourceWidth() const
+    void* pCompassTextureGetSourceHeight = nullptr; // CompassTexture::getSourceHeight() const
+    void* pClockTextureGetSourceWidth = nullptr; // ClockTexture::getSourceWidth() const
+    void* pClockTextureGetSourceHeight = nullptr; // ClockTexture::getSourceHeight() const
     void* pItemInstanceMineBlock = nullptr; // ItemInstance::mineBlock(Level*,int,int,int,int,shared_ptr<Player>)
     void* pItemMineBlock = nullptr;        // Item::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
     void* pDiggerItemMineBlock = nullptr;  // DiggerItem::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)

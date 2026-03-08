@@ -124,6 +124,90 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
+    if (symbols.pCompassTextureCycleFrames)
+    {
+        if (MH_CreateHook(symbols.pCompassTextureCycleFrames,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_CompassTextureCycleFrames),
+                          reinterpret_cast<void**>(&GameHooks::Original_CompassTextureCycleFrames)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook CompassTexture::cycleFrames");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked CompassTexture::cycleFrames (texture pack crash guard)");
+        }
+    }
+
+    if (symbols.pClockTextureCycleFrames)
+    {
+        if (MH_CreateHook(symbols.pClockTextureCycleFrames,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ClockTextureCycleFrames),
+                          reinterpret_cast<void**>(&GameHooks::Original_ClockTextureCycleFrames)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ClockTexture::cycleFrames");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ClockTexture::cycleFrames (texture pack crash guard)");
+        }
+    }
+
+    if (symbols.pCompassTextureGetSourceWidth)
+    {
+        if (MH_CreateHook(symbols.pCompassTextureGetSourceWidth,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_CompassTextureGetSourceWidth),
+                          reinterpret_cast<void**>(&GameHooks::Original_CompassTextureGetSourceWidth)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook CompassTexture::getSourceWidth");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked CompassTexture::getSourceWidth (texture pack crash guard)");
+        }
+    }
+
+    if (symbols.pCompassTextureGetSourceHeight)
+    {
+        if (MH_CreateHook(symbols.pCompassTextureGetSourceHeight,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_CompassTextureGetSourceHeight),
+                          reinterpret_cast<void**>(&GameHooks::Original_CompassTextureGetSourceHeight)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook CompassTexture::getSourceHeight");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked CompassTexture::getSourceHeight (texture pack crash guard)");
+        }
+    }
+
+    if (symbols.pClockTextureGetSourceWidth)
+    {
+        if (MH_CreateHook(symbols.pClockTextureGetSourceWidth,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ClockTextureGetSourceWidth),
+                          reinterpret_cast<void**>(&GameHooks::Original_ClockTextureGetSourceWidth)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ClockTexture::getSourceWidth");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ClockTexture::getSourceWidth (texture pack crash guard)");
+        }
+    }
+
+    if (symbols.pClockTextureGetSourceHeight)
+    {
+        if (MH_CreateHook(symbols.pClockTextureGetSourceHeight,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ClockTextureGetSourceHeight),
+                          reinterpret_cast<void**>(&GameHooks::Original_ClockTextureGetSourceHeight)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ClockTexture::getSourceHeight");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ClockTexture::getSourceHeight (texture pack crash guard)");
+        }
+    }
+
     if (symbols.pItemMineBlock)
     {
         if (MH_CreateHook(symbols.pItemMineBlock,

@@ -21,6 +21,8 @@ typedef void* (__fastcall *RegisterIcon_fn)(void* thisPtr, const std::wstring& n
 typedef void* (__fastcall *ItemInstanceGetIcon_fn)(void* thisPtr);
 typedef void (__fastcall *EntityRendererBindTextureResource_fn)(void* thisPtr, void* resourcePtr);
 typedef void (__fastcall *ItemRendererRenderItemBillboard_fn)(void* thisPtr, void* entitySharedPtr, void* iconPtr, int count, float a, float red, float green, float blue);
+typedef void (__fastcall *AnimatedTextureCycleFrames_fn)(void* thisPtr);
+typedef int (__fastcall *TextureGetSourceDim_fn)(void* thisPtr);
 typedef void (__fastcall *ItemInstanceMineBlock_fn)(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
 typedef bool (__fastcall *ItemMineBlock_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
 typedef bool (__fastcall *GameModeUseItem_fn)(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
@@ -57,6 +59,12 @@ namespace GameHooks
     extern ItemInstanceGetIcon_fn Original_ItemInstanceGetIcon;
     extern EntityRendererBindTextureResource_fn Original_EntityRendererBindTextureResource;
     extern ItemRendererRenderItemBillboard_fn Original_ItemRendererRenderItemBillboard;
+    extern AnimatedTextureCycleFrames_fn Original_CompassTextureCycleFrames;
+    extern AnimatedTextureCycleFrames_fn Original_ClockTextureCycleFrames;
+    extern TextureGetSourceDim_fn Original_CompassTextureGetSourceWidth;
+    extern TextureGetSourceDim_fn Original_CompassTextureGetSourceHeight;
+    extern TextureGetSourceDim_fn Original_ClockTextureGetSourceWidth;
+    extern TextureGetSourceDim_fn Original_ClockTextureGetSourceHeight;
     extern ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock;
     extern ItemMineBlock_fn       Original_ItemMineBlock;
     extern ItemMineBlock_fn       Original_DiggerItemMineBlock;
@@ -86,6 +94,12 @@ namespace GameHooks
     void* __fastcall Hooked_ItemInstanceGetIcon(void* thisPtr);
     void __fastcall Hooked_EntityRendererBindTextureResource(void* thisPtr, void* resourcePtr);
     void __fastcall Hooked_ItemRendererRenderItemBillboard(void* thisPtr, void* entitySharedPtr, void* iconPtr, int count, float a, float red, float green, float blue);
+    void __fastcall Hooked_CompassTextureCycleFrames(void* thisPtr);
+    void __fastcall Hooked_ClockTextureCycleFrames(void* thisPtr);
+    int __fastcall Hooked_CompassTextureGetSourceWidth(void* thisPtr);
+    int __fastcall Hooked_CompassTextureGetSourceHeight(void* thisPtr);
+    int __fastcall Hooked_ClockTextureGetSourceWidth(void* thisPtr);
+    int __fastcall Hooked_ClockTextureGetSourceHeight(void* thisPtr);
     void __fastcall Hooked_ItemInstanceMineBlock(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
     bool __fastcall Hooked_ItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
     bool __fastcall Hooked_DiggerItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);

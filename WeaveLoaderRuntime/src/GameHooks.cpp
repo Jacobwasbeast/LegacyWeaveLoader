@@ -31,6 +31,12 @@ namespace GameHooks
     ItemInstanceGetIcon_fn Original_ItemInstanceGetIcon = nullptr;
     EntityRendererBindTextureResource_fn Original_EntityRendererBindTextureResource = nullptr;
     ItemRendererRenderItemBillboard_fn Original_ItemRendererRenderItemBillboard = nullptr;
+    AnimatedTextureCycleFrames_fn Original_CompassTextureCycleFrames = nullptr;
+    AnimatedTextureCycleFrames_fn Original_ClockTextureCycleFrames = nullptr;
+    TextureGetSourceDim_fn Original_CompassTextureGetSourceWidth = nullptr;
+    TextureGetSourceDim_fn Original_CompassTextureGetSourceHeight = nullptr;
+    TextureGetSourceDim_fn Original_ClockTextureGetSourceWidth = nullptr;
+    TextureGetSourceDim_fn Original_ClockTextureGetSourceHeight = nullptr;
     ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock = nullptr;
     ItemMineBlock_fn       Original_ItemMineBlock = nullptr;
     ItemMineBlock_fn       Original_DiggerItemMineBlock = nullptr;
@@ -76,6 +82,7 @@ namespace GameHooks
     static thread_local bool s_hasForcedBillboardRoute = false;
     static thread_local int s_forcedBillboardAtlas = -1;
     static thread_local int s_forcedBillboardPage = 0;
+    static int s_animatedTextureGuardLogCount = 0;
 
     struct TextureNameArrayNative
     {
@@ -1060,6 +1067,102 @@ namespace GameHooks
         s_hasForcedBillboardRoute = hadForcedRoute;
         s_forcedBillboardAtlas = prevAtlas;
         s_forcedBillboardPage = prevPage;
+    }
+
+    static void LogAnimatedTextureGuard(const char* what, void* thisPtr)
+    {
+        if (s_animatedTextureGuardLogCount >= 12)
+            return;
+        LogUtil::Log("[WeaveLoader] AnimatedTextureGuard: %s fallback for %p", what, thisPtr);
+        s_animatedTextureGuardLogCount++;
+    }
+
+    void __fastcall Hooked_CompassTextureCycleFrames(void* thisPtr)
+    {
+        if (!Original_CompassTextureCycleFrames)
+            return;
+        __try
+        {
+            Original_CompassTextureCycleFrames(thisPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            LogAnimatedTextureGuard("CompassTexture::cycleFrames", thisPtr);
+        }
+    }
+
+    void __fastcall Hooked_ClockTextureCycleFrames(void* thisPtr)
+    {
+        if (!Original_ClockTextureCycleFrames)
+            return;
+        __try
+        {
+            Original_ClockTextureCycleFrames(thisPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            LogAnimatedTextureGuard("ClockTexture::cycleFrames", thisPtr);
+        }
+    }
+
+    int __fastcall Hooked_CompassTextureGetSourceWidth(void* thisPtr)
+    {
+        if (!Original_CompassTextureGetSourceWidth)
+            return 16;
+        __try
+        {
+            return Original_CompassTextureGetSourceWidth(thisPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            LogAnimatedTextureGuard("CompassTexture::getSourceWidth", thisPtr);
+            return 16;
+        }
+    }
+
+    int __fastcall Hooked_CompassTextureGetSourceHeight(void* thisPtr)
+    {
+        if (!Original_CompassTextureGetSourceHeight)
+            return 16;
+        __try
+        {
+            return Original_CompassTextureGetSourceHeight(thisPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            LogAnimatedTextureGuard("CompassTexture::getSourceHeight", thisPtr);
+            return 16;
+        }
+    }
+
+    int __fastcall Hooked_ClockTextureGetSourceWidth(void* thisPtr)
+    {
+        if (!Original_ClockTextureGetSourceWidth)
+            return 16;
+        __try
+        {
+            return Original_ClockTextureGetSourceWidth(thisPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            LogAnimatedTextureGuard("ClockTexture::getSourceWidth", thisPtr);
+            return 16;
+        }
+    }
+
+    int __fastcall Hooked_ClockTextureGetSourceHeight(void* thisPtr)
+    {
+        if (!Original_ClockTextureGetSourceHeight)
+            return 16;
+        __try
+        {
+            return Original_ClockTextureGetSourceHeight(thisPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            LogAnimatedTextureGuard("ClockTexture::getSourceHeight", thisPtr);
+            return 16;
+        }
     }
 
     void __fastcall Hooked_ItemInstanceMineBlock(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr)

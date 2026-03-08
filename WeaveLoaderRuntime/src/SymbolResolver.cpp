@@ -21,6 +21,12 @@ static const char* SYM_REGISTER_ICON = "?registerIcon@PreStitchedTextureMap@@UEA
 static const char* SYM_ITEMINSTANCE_GETICON = "?getIcon@ItemInstance@@QEAAPEAVIcon@@XZ";
 static const char* SYM_ENTITYRENDERER_BINDTEXTURE_RESOURCE = "?bindTexture@EntityRenderer@@MEAAXPEAVResourceLocation@@@Z";
 static const char* SYM_ITEMRENDERER_RENDERITEMBILLBOARD = "?renderItemBillboard@ItemRenderer@@EEAAXV?$shared_ptr@VItemEntity@@@std@@PEAVIcon@@HMMMM@Z";
+static const char* SYM_COMPASS_CYCLEFRAMES = "?cycleFrames@CompassTexture@@UEAAXXZ";
+static const char* SYM_CLOCK_CYCLEFRAMES = "?cycleFrames@ClockTexture@@UEAAXXZ";
+static const char* SYM_COMPASS_GETSOURCEWIDTH = "?getSourceWidth@CompassTexture@@UEBAHXZ";
+static const char* SYM_COMPASS_GETSOURCEHEIGHT = "?getSourceHeight@CompassTexture@@UEBAHXZ";
+static const char* SYM_CLOCK_GETSOURCEWIDTH = "?getSourceWidth@ClockTexture@@UEBAHXZ";
+static const char* SYM_CLOCK_GETSOURCEHEIGHT = "?getSourceHeight@ClockTexture@@UEBAHXZ";
 static const char* SYM_ITEMINSTANCE_MINEBLOCK = "?mineBlock@ItemInstance@@QEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
 static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
 static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
@@ -122,6 +128,12 @@ bool SymbolResolver::ResolveGameFunctions()
     pItemInstanceGetIcon = Resolve(SYM_ITEMINSTANCE_GETICON);
     pEntityRendererBindTextureResource = Resolve(SYM_ENTITYRENDERER_BINDTEXTURE_RESOURCE);
     pItemRendererRenderItemBillboard = Resolve(SYM_ITEMRENDERER_RENDERITEMBILLBOARD);
+    pCompassTextureCycleFrames = Resolve(SYM_COMPASS_CYCLEFRAMES);
+    pClockTextureCycleFrames = Resolve(SYM_CLOCK_CYCLEFRAMES);
+    pCompassTextureGetSourceWidth = Resolve(SYM_COMPASS_GETSOURCEWIDTH);
+    pCompassTextureGetSourceHeight = Resolve(SYM_COMPASS_GETSOURCEHEIGHT);
+    pClockTextureGetSourceWidth = Resolve(SYM_CLOCK_GETSOURCEWIDTH);
+    pClockTextureGetSourceHeight = Resolve(SYM_CLOCK_GETSOURCEHEIGHT);
     pItemInstanceMineBlock = Resolve(SYM_ITEMINSTANCE_MINEBLOCK);
     pItemMineBlock = Resolve(SYM_ITEM_MINEBLOCK);
     pDiggerItemMineBlock = Resolve(SYM_DIGGERITEM_MINEBLOCK);
@@ -181,6 +193,12 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("ItemInstance::getIcon", pItemInstanceGetIcon);
     logSym("EntityRenderer::bindTexture(ResourceLocation)", pEntityRendererBindTextureResource);
     logSym("ItemRenderer::renderItemBillboard", pItemRendererRenderItemBillboard);
+    logSym("CompassTexture::cycleFrames", pCompassTextureCycleFrames);
+    logSym("ClockTexture::cycleFrames", pClockTextureCycleFrames);
+    logSym("CompassTexture::getSourceWidth", pCompassTextureGetSourceWidth);
+    logSym("CompassTexture::getSourceHeight", pCompassTextureGetSourceHeight);
+    logSym("ClockTexture::getSourceWidth", pClockTextureGetSourceWidth);
+    logSym("ClockTexture::getSourceHeight", pClockTextureGetSourceHeight);
     logSym("ItemInstance::mineBlock", pItemInstanceMineBlock);
     logSym("Item::mineBlock", pItemMineBlock);
     logSym("DiggerItem::mineBlock", pDiggerItemMineBlock);

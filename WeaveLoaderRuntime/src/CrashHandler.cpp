@@ -88,6 +88,24 @@ static bool IsFatalException(DWORD code)
     }
 }
 
+static bool ShouldWriteVectoredReport(EXCEPTION_RECORD* er)
+{
+    if (!er)
+        return false;
+
+    switch (er->ExceptionCode)
+    {
+    case STATUS_STACK_BUFFER_OVERRUN:
+    case STATUS_INVALID_CRUNTIME_PARAMETER:
+    case STATUS_FAIL_FAST_EXCEPTION:
+    case EXCEPTION_STACK_OVERFLOW:
+    case EXCEPTION_NONCONTINUABLE_EXCEPTION:
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void GetModuleForAddr(DWORD64 addr, char* nameBuf, size_t nameBufSize, DWORD64* outBase)
 {
     *outBase = 0;
@@ -353,7 +371,16 @@ static LONG WINAPI VectoredHandler(EXCEPTION_POINTERS* ep)
     if (!IsFatalException(code))
         return EXCEPTION_CONTINUE_SEARCH;
 
-    WriteCrashReport("VectoredExceptionHandler", ep->ExceptionRecord, ep->ContextRecord);
+    // TODO: Remove this suppression once the animated texture pack fault is fixed
+    // at the source. For now, a vectored handler sees first-chance exceptions
+    // before local __try/__except blocks run, and logging those handled faults
+    // as crashes causes severe log spam and stalls under Windows.
+    //
+    // Keep vectored reporting only for fail-fast/noncontinuable cases that will
+    // not normally make it to the top-level unhandled filter.
+    if (ShouldWriteVectoredReport(ep->ExceptionRecord))
+        WriteCrashReport("VectoredExceptionHandler", ep->ExceptionRecord, ep->ContextRecord);
+
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
