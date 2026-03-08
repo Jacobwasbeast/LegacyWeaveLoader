@@ -23,6 +23,8 @@ static managed_entry_fn fn_PostInit = nullptr;
 static managed_entry_fn fn_Tick = nullptr;
 static managed_entry_fn fn_Shutdown = nullptr;
 static managed_entry_fn fn_ItemMineBlock = nullptr;
+static managed_entry_fn fn_ItemUse = nullptr;
+static managed_entry_fn fn_EntitySummoned = nullptr;
 
 static bool LoadHostfxr()
 {
@@ -179,6 +181,8 @@ bool DotNetHost::Initialize()
     ok &= resolve(L"Tick", &fn_Tick);
     ok &= resolve(L"Shutdown", &fn_Shutdown);
     ok &= resolve(L"OnItemMineBlock", &fn_ItemMineBlock);
+    ok &= resolve(L"OnItemUse", &fn_ItemUse);
+    ok &= resolve(L"OnEntitySummoned", &fn_EntitySummoned);
 
     if (!ok)
     {
@@ -234,6 +238,29 @@ int DotNetHost::CallItemMineBlock(const void* args, int sizeBytes)
     if (!fn_ItemMineBlock || !args || sizeBytes <= 0)
         return 0;
     return fn_ItemMineBlock(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallItemUse(const void* args, int sizeBytes)
+{
+    if (!fn_ItemUse || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemUse(const_cast<void*>(args), sizeBytes);
+}
+
+void DotNetHost::CallEntitySummoned(int entityNumericId, float x, float y, float z)
+{
+    if (!fn_EntitySummoned)
+        return;
+
+    struct EntitySummonedNativeArgs
+    {
+        int entityNumericId;
+        float x;
+        float y;
+        float z;
+    } native{ entityNumericId, x, y, z };
+
+    fn_EntitySummoned(&native, sizeof(native));
 }
 
 void DotNetHost::Cleanup()

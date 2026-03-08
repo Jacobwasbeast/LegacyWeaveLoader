@@ -34,6 +34,15 @@ public class EntitySpawnEventArgs : EventArgs
     public float Z { get; init; }
 }
 
+public class WorldLoadedEventArgs : EventArgs
+{
+    public nint NativeLevelPointer { get; init; }
+}
+
+public class WorldUnloadedEventArgs : EventArgs
+{
+}
+
 public class PlayerJoinEventArgs : EventArgs
 {
     public int PlayerId { get; init; }
@@ -51,10 +60,14 @@ public static class GameEvents
     public static event EventHandler<ChatEventArgs>? OnChat;
     public static event EventHandler<EntitySpawnEventArgs>? OnEntitySpawn;
     public static event EventHandler<PlayerJoinEventArgs>? OnPlayerJoin;
+    public static event EventHandler<WorldLoadedEventArgs>? OnWorldLoaded;
+    public static event EventHandler<WorldUnloadedEventArgs>? OnWorldUnloaded;
 
     internal static void FireBlockBreak(BlockBreakEventArgs e) => OnBlockBreak?.Invoke(null, e);
     internal static void FireBlockPlace(BlockPlaceEventArgs e) => OnBlockPlace?.Invoke(null, e);
     internal static void FireChat(ChatEventArgs e) => OnChat?.Invoke(null, e);
     internal static void FireEntitySpawn(EntitySpawnEventArgs e) => OnEntitySpawn?.Invoke(null, e);
     internal static void FirePlayerJoin(PlayerJoinEventArgs e) => OnPlayerJoin?.Invoke(null, e);
+    internal static void FireWorldLoaded(WorldLoadedEventArgs e) => OnWorldLoaded?.Invoke(null, e);
+    internal static void FireWorldUnloaded(WorldUnloadedEventArgs e) => OnWorldUnloaded?.Invoke(null, e);
 }

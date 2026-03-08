@@ -57,6 +57,11 @@ extern "C"
     __declspec(dllexport) int native_get_block_id(const char* namespacedId);
     __declspec(dllexport) int native_get_item_id(const char* namespacedId);
     __declspec(dllexport) int native_get_entity_id(const char* namespacedId);
+    __declspec(dllexport) int native_consume_item_from_player(void* playerPtr, int numericItemId, int count);
+    __declspec(dllexport) int native_damage_item_instance(void* itemInstancePtr, int amount, void* ownerSharedPtr);
+    __declspec(dllexport) int native_spawn_entity_from_player_look(void* playerPtr, void* playerSharedPtr, int numericEntityId, double speed, double spawnForward, double spawnUp);
+    __declspec(dllexport) int native_summon_entity(const char* namespacedId, double x, double y, double z);
+    __declspec(dllexport) int native_summon_entity_by_id(int numericEntityId, double x, double y, double z);
 
     __declspec(dllexport) void native_subscribe_event(
         const char* eventName,

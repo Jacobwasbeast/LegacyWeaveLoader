@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace WeaveLoader.API.Block;
 
 /// <summary>
@@ -24,6 +26,9 @@ public class RegisteredBlock
 /// </summary>
 public static class BlockRegistry
 {
+    private static readonly object s_lock = new();
+    private static readonly Dictionary<int, Identifier> s_idByNumeric = new();
+
     /// <summary>
     /// Register a new block with the game engine.
     /// </summary>
@@ -53,6 +58,18 @@ public static class BlockRegistry
         }
 
         Logger.Debug($"Registered block '{id}' -> numeric ID {numericId}");
+        lock (s_lock)
+        {
+            s_idByNumeric[numericId] = id;
+        }
         return new RegisteredBlock(id, numericId);
+    }
+
+    internal static bool TryGetIdentifier(int numericId, out Identifier id)
+    {
+        lock (s_lock)
+        {
+            return s_idByNumeric.TryGetValue(numericId, out id);
+        }
     }
 }

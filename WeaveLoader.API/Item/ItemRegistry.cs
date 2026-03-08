@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace WeaveLoader.API.Item;
 
 /// <summary>
@@ -24,6 +26,9 @@ public class RegisteredItem
 /// </summary>
 public static class ItemRegistry
 {
+    private static readonly object s_lock = new();
+    private static readonly Dictionary<int, Identifier> s_idByNumeric = new();
+
     /// <summary>
     /// Register a new item with the game engine.
     /// </summary>
@@ -85,6 +90,18 @@ public static class ItemRegistry
         }
 
         Logger.Debug($"Registered item '{id}' -> numeric ID {numericId}");
+        lock (s_lock)
+        {
+            s_idByNumeric[numericId] = id;
+        }
         return new RegisteredItem(id, numericId);
+    }
+
+    internal static bool TryGetIdentifier(int numericId, out Identifier id)
+    {
+        lock (s_lock)
+        {
+            return s_idByNumeric.TryGetValue(numericId, out id);
+        }
     }
 }

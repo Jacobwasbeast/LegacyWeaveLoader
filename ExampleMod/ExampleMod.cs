@@ -12,6 +12,7 @@ public class ExampleMod : IMod
     public static RegisteredBlock? RubyOre;
     public static RegisteredItem? Ruby;
     public static RegisteredItem? RubyPickaxeItem;
+    public static RegisteredItem? RubyWandItem;
 
     private sealed class RubyPickaxe : PickaxeItem
     {
@@ -19,6 +20,53 @@ public class ExampleMod : IMod
         {
             Logger.Info($"RubyPickaxe mined tile={context.TileId} at ({context.X}, {context.Y}, {context.Z})");
             return base.OnMineBlock(context);
+        }
+    }
+
+    private sealed class RubyWand : Item
+    {
+        private const long CooldownMs = 1500;
+        private long _nextClientUseAtMs;
+        private long _nextServerUseAtMs;
+
+        public override UseItemResult OnUseItem(UseItemContext context)
+        {
+            if (context.IsTestUseOnly)
+                return UseItemResult.CancelVanilla;
+
+            long now = Environment.TickCount64;
+            ref long nextUseAtMs = ref context.IsClientSide ? ref _nextClientUseAtMs : ref _nextServerUseAtMs;
+            if (now < nextUseAtMs)
+            {
+                long remaining = nextUseAtMs - now;
+                Logger.Info($"RubyWand is cooling down ({remaining}ms remaining)");
+                return UseItemResult.CancelVanilla;
+            }
+
+            if (!context.ConsumeInventoryItem("minecraft:gunpowder", 1))
+            {
+                Logger.Info("RubyWand needs gunpowder.");
+                return UseItemResult.CancelVanilla;
+            }
+
+            if (context.IsClientSide)
+            {
+                context.DamageItem(10);
+                nextUseAtMs = now + CooldownMs;
+                return UseItemResult.ContinueVanilla;
+            }
+
+            bool spawned = context.SpawnEntityFromLook("minecraft:wither_skull", speed: 1.4, spawnForward: 1.0, spawnUp: 1.2);
+            if (!spawned)
+            {
+                Logger.Info("RubyWand failed to spawn fireball.");
+                return UseItemResult.CancelVanilla;
+            }
+
+            context.DamageItem(10);
+            Logger.Info($"RubyWand cast fireball! (item={context.ItemId})");
+            nextUseAtMs = now + CooldownMs;
+            return UseItemResult.CancelVanilla;
         }
     }
 
@@ -47,6 +95,13 @@ public class ExampleMod : IMod
                 .MaxDamage(512)
                 .Icon("examplemod:ruby_pickaxe")  // From assets/items/ruby_pickaxe.png
                 .Name("Ruby Pickaxe")
+                .InCreativeTab(CreativeTab.ToolsAndWeapons));
+
+        RubyWandItem = Registry.Item.Register("examplemod:ruby_wand", new RubyWand(),
+            new ItemProperties()
+                .MaxStackSize(1)
+                .Icon("examplemod:ruby_wand")  // From assets/items/ruby_wand.png
+                .Name("Ruby Wand")
                 .InCreativeTab(CreativeTab.ToolsAndWeapons));
 
         Registry.Recipe.AddFurnace("examplemod:ruby_ore", "examplemod:ruby", 1.0f);

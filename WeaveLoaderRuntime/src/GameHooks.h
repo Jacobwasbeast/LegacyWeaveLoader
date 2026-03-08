@@ -21,6 +21,18 @@ typedef void* (__fastcall *RegisterIcon_fn)(void* thisPtr, const std::wstring& n
 typedef void* (__fastcall *ItemInstanceGetIcon_fn)(void* thisPtr);
 typedef void (__fastcall *ItemInstanceMineBlock_fn)(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
 typedef bool (__fastcall *ItemMineBlock_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
+typedef bool (__fastcall *GameModeUseItem_fn)(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
+typedef void (__fastcall *MinecraftSetLevel_fn)(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
+typedef bool (__fastcall *LevelAddEntity_fn)(void* thisPtr, void* entitySharedPtr);
+typedef void (__fastcall *EntityMoveTo_fn)(void* thisPtr, double x, double y, double z, float yRot, float xRot);
+typedef void (__fastcall *EntityIONewById_fn)(void* outSharedPtr, int entityNumericId, void* level);
+typedef void (__fastcall *EntitySetPos_fn)(void* thisPtr, double x, double y, double z);
+typedef void* (__fastcall *EntityGetLookAngle_fn)(void* thisPtr);
+typedef void* (__fastcall *LivingEntityGetViewVector_fn)(void* thisPtr, float partialTicks);
+typedef void (__fastcall *EntityLerpMotion_fn)(void* thisPtr, double x, double y, double z);
+typedef bool (__fastcall *InventoryRemoveResource_fn)(void* thisPtr, int itemId);
+typedef void (__fastcall *ItemInstanceHurtAndBreak_fn)(void* thisPtr, int amount, void* ownerSharedPtr);
+typedef void (__fastcall *AbstractContainerMenuBroadcastChanges_fn)(void* thisPtr);
 typedef void (__fastcall *TexturesBindTextureResource_fn)(void* thisPtr, void* resourcePtr);
 typedef int (__fastcall *TexturesLoadTextureByName_fn)(void* thisPtr, int texId, const std::wstring& resourceName);
 typedef int (__fastcall *TexturesLoadTextureByIndex_fn)(void* thisPtr, int idx);
@@ -44,6 +56,9 @@ namespace GameHooks
     extern ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock;
     extern ItemMineBlock_fn       Original_ItemMineBlock;
     extern ItemMineBlock_fn       Original_DiggerItemMineBlock;
+    extern GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem;
+    extern GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem;
+    extern MinecraftSetLevel_fn   Original_MinecraftSetLevel;
     extern TexturesBindTextureResource_fn Original_TexturesBindTextureResource;
     extern TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName;
     extern TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex;
@@ -68,6 +83,9 @@ namespace GameHooks
     void __fastcall Hooked_ItemInstanceMineBlock(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
     bool __fastcall Hooked_ItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
     bool __fastcall Hooked_DiggerItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
+    bool __fastcall Hooked_ServerPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
+    bool __fastcall Hooked_MultiPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
+    void __fastcall Hooked_MinecraftSetLevel(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
     void __fastcall Hooked_TexturesBindTextureResource(void* thisPtr, void* resourcePtr);
     int __fastcall Hooked_TexturesLoadTextureByName(void* thisPtr, int texId, const std::wstring& resourceName);
     int __fastcall Hooked_TexturesLoadTextureByIndex(void* thisPtr, int idx);
@@ -76,4 +94,25 @@ namespace GameHooks
     float __fastcall Hooked_StitchedGetV0(void* thisPtr, bool adjust);
     float __fastcall Hooked_StitchedGetV1(void* thisPtr, bool adjust);
     void SetAtlasLocationPointers(void* blocksLocation, void* itemsLocation);
+    void SetSummonSymbols(void* levelAddEntity,
+                          void* entityIoNewById,
+                          void* entityMoveTo,
+                          void* entitySetPos);
+    void SetUseActionSymbols(void* inventoryRemoveResource,
+                             void* inventoryVtable,
+                             void* itemInstanceHurtAndBreak,
+                             void* containerBroadcastChanges,
+                             void* entityGetLookAngle,
+                             void* livingEntityGetViewVector,
+                             void* entityLerpMotion,
+                             void* entitySetPos);
+    bool SummonEntityByNumericId(int entityNumericId, double x, double y, double z);
+    bool ConsumePlayerResource(void* playerPtr, int itemId, int count);
+    bool DamageItemInstance(void* itemInstancePtr, int amount, void* ownerSharedPtr);
+    bool SummonEntityFromPlayerLook(void* playerPtr,
+                                    void* playerSharedPtr,
+                                    int entityNumericId,
+                                    double speed,
+                                    double spawnForward,
+                                    double spawnUp);
 }

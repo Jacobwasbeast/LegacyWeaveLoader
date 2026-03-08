@@ -3,6 +3,7 @@
 #include "CreativeInventory.h"
 #include "GameObjectFactory.h"
 #include "FurnaceRecipeRegistry.h"
+#include "GameHooks.h"
 #include "ModStrings.h"
 #include "LogUtil.h"
 #include <Windows.h>
@@ -247,6 +248,57 @@ int native_get_entity_id(const char* namespacedId)
 {
     if (!namespacedId) return -1;
     return IdRegistry::Instance().GetNumericId(IdRegistry::Type::Entity, namespacedId);
+}
+
+int native_consume_item_from_player(void* playerPtr, int numericItemId, int count)
+{
+    if (numericItemId < 0 || count <= 0)
+        return 0;
+    return GameHooks::ConsumePlayerResource(playerPtr, numericItemId, count) ? 1 : 0;
+}
+
+int native_damage_item_instance(void* itemInstancePtr, int amount, void* ownerSharedPtr)
+{
+    if (amount <= 0)
+        return 0;
+    return GameHooks::DamageItemInstance(itemInstancePtr, amount, ownerSharedPtr) ? 1 : 0;
+}
+
+int native_spawn_entity_from_player_look(void* playerPtr, void* playerSharedPtr, int numericEntityId, double speed, double spawnForward, double spawnUp)
+{
+    if (numericEntityId < 0)
+        return 0;
+    return GameHooks::SummonEntityFromPlayerLook(playerPtr, playerSharedPtr, numericEntityId, speed, spawnForward, spawnUp) ? 1 : 0;
+}
+
+int native_summon_entity_by_id(int numericEntityId, double x, double y, double z)
+{
+    if (!GameHooks::SummonEntityByNumericId(numericEntityId, x, y, z))
+    {
+        LogUtil::Log("[WeaveLoader] Summon failed: entity=%d at (%.2f, %.2f, %.2f)",
+                     numericEntityId, x, y, z);
+        return 0;
+    }
+
+    LogUtil::Log("[WeaveLoader] Summoned entity=%d at (%.2f, %.2f, %.2f)",
+                 numericEntityId, x, y, z);
+    return 1;
+}
+
+int native_summon_entity(const char* namespacedId, double x, double y, double z)
+{
+    if (!namespacedId || !namespacedId[0])
+        return 0;
+
+    const int entityNumericId =
+        IdRegistry::Instance().GetNumericId(IdRegistry::Type::Entity, namespacedId);
+    if (entityNumericId < 0)
+    {
+        LogUtil::Log("[WeaveLoader] Summon failed: unknown entity id '%s'", namespacedId);
+        return 0;
+    }
+
+    return native_summon_entity_by_id(entityNumericId, x, y, z);
 }
 
 void native_subscribe_event(const char* eventName, void* managedFnPtr)

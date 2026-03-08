@@ -77,6 +77,27 @@ internal static class NativeInterop
     internal static extern int native_get_entity_id(string namespacedId);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_summon_entity(string namespacedId, double x, double y, double z);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_summon_entity_by_id(int numericEntityId, double x, double y, double z);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_consume_item_from_player(nint playerPtr, int numericItemId, int count);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_damage_item_instance(nint itemInstancePtr, int amount, nint ownerSharedPtr);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_spawn_entity_from_player_look(
+        nint playerPtr,
+        nint playerSharedPtr,
+        int numericEntityId,
+        double speed,
+        double spawnForward,
+        double spawnUp);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern void native_subscribe_event(string eventName, IntPtr managedFnPtr);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]

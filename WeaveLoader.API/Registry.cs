@@ -34,6 +34,12 @@ public static class Registry
     {
         public static RegisteredEntity Register(Identifier id, EntityDefinition definition)
             => EntityRegistry.Register(id, definition);
+
+        public static bool Summon(Identifier id, double x, double y, double z)
+            => EntityRegistry.Summon(id, x, y, z);
+
+        public static bool Summon(int numericId, double x, double y, double z)
+            => EntityRegistry.Summon(numericId, x, y, z);
     }
 
     /// <summary>Recipe registration for crafting and smelting.</summary>

@@ -27,6 +27,8 @@ public:
     void* pItemInstanceMineBlock = nullptr; // ItemInstance::mineBlock(Level*,int,int,int,int,shared_ptr<Player>)
     void* pItemMineBlock = nullptr;        // Item::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
     void* pDiggerItemMineBlock = nullptr;  // DiggerItem::mineBlock(shared_ptr<ItemInstance>,Level*,int,int,int,int,shared_ptr<LivingEntity>)
+    void* pServerPlayerGameModeUseItem = nullptr; // ServerPlayerGameMode::useItem(shared_ptr<Player>,Level*,shared_ptr<ItemInstance>,bool)
+    void* pMultiPlayerGameModeUseItem = nullptr;  // MultiPlayerGameMode::useItem(shared_ptr<Player>,Level*,shared_ptr<ItemInstance>,bool)
     void* pTexturesBindTextureResource = nullptr; // Textures::bindTexture(ResourceLocation*)
     void* pTexturesLoadTextureByName = nullptr;   // Textures::loadTexture(TEXTURE_NAME,const wstring&)
     void* pTexturesLoadTextureByIndex = nullptr;  // Textures::loadTexture(int)
@@ -34,6 +36,18 @@ public:
     void* pStitchedGetU1 = nullptr;       // StitchedTexture::getU1(bool) const
     void* pStitchedGetV0 = nullptr;       // StitchedTexture::getV0(bool) const
     void* pStitchedGetV1 = nullptr;       // StitchedTexture::getV1(bool) const
+    void* pMinecraftSetLevel = nullptr;   // Minecraft::setLevel(MultiPlayerLevel*,int,shared_ptr<Player>,bool,bool)
+    void* pLevelAddEntity = nullptr;      // Level::addEntity(shared_ptr<Entity>)
+    void* pEntityIONewById = nullptr;     // EntityIO::newById(int,Level*)
+    void* pEntityMoveTo = nullptr;        // Entity::moveTo(double,double,double,float,float)
+    void* pEntitySetPos = nullptr;        // Entity::setPos(double,double,double)
+    void* pEntityGetLookAngle = nullptr;  // Entity::getLookAngle()
+    void* pLivingEntityGetViewVector = nullptr; // LivingEntity::getViewVector(float)
+    void* pEntityLerpMotion = nullptr;    // Entity::lerpMotion(double,double,double)
+    void* pInventoryRemoveResource = nullptr; // Inventory::removeResource(int)
+    void* pInventoryVtable = nullptr;      // Inventory vftable
+    void* pItemInstanceHurtAndBreak = nullptr; // ItemInstance::hurtAndBreak(int,shared_ptr<LivingEntity>)
+    void* pAbstractContainerMenuBroadcastChanges = nullptr; // AbstractContainerMenu::broadcastChanges()
     void* pTextureAtlasLocationBlocks = nullptr; // TextureAtlas::LOCATION_BLOCKS
     void* pTextureAtlasLocationItems = nullptr;  // TextureAtlas::LOCATION_ITEMS
 

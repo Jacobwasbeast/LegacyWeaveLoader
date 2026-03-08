@@ -54,6 +54,20 @@ bool HookManager::Install(const SymbolResolver& symbols)
         LogUtil::Log("[WeaveLoader] Hooked Minecraft::init");
     }
 
+    if (symbols.pMinecraftSetLevel)
+    {
+        if (MH_CreateHook(symbols.pMinecraftSetLevel,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_MinecraftSetLevel),
+                          reinterpret_cast<void**>(&GameHooks::Original_MinecraftSetLevel)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Minecraft::setLevel");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Minecraft::setLevel (active level tracking)");
+        }
+    }
+
     if (symbols.pItemInstanceMineBlock)
     {
         if (MH_CreateHook(symbols.pItemInstanceMineBlock,
@@ -107,6 +121,34 @@ bool HookManager::Install(const SymbolResolver& symbols)
         else
         {
             LogUtil::Log("[WeaveLoader] Hooked DiggerItem::mineBlock (managed item callbacks)");
+        }
+    }
+
+    if (symbols.pServerPlayerGameModeUseItem)
+    {
+        if (MH_CreateHook(symbols.pServerPlayerGameModeUseItem,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ServerPlayerGameModeUseItem),
+                          reinterpret_cast<void**>(&GameHooks::Original_ServerPlayerGameModeUseItem)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ServerPlayerGameMode::useItem");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ServerPlayerGameMode::useItem (managed item callbacks)");
+        }
+    }
+
+    if (symbols.pMultiPlayerGameModeUseItem)
+    {
+        if (MH_CreateHook(symbols.pMultiPlayerGameModeUseItem,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_MultiPlayerGameModeUseItem),
+                          reinterpret_cast<void**>(&GameHooks::Original_MultiPlayerGameModeUseItem)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook MultiPlayerGameMode::useItem");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked MultiPlayerGameMode::useItem (managed item callbacks)");
         }
     }
 
@@ -207,6 +249,20 @@ bool HookManager::Install(const SymbolResolver& symbols)
 
     GameObjectFactory::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
     FurnaceRecipeRegistry::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
+    GameHooks::SetSummonSymbols(
+        symbols.pLevelAddEntity,
+        symbols.pEntityIONewById,
+        symbols.pEntityMoveTo,
+        symbols.pEntitySetPos);
+    GameHooks::SetUseActionSymbols(
+        symbols.pInventoryRemoveResource,
+        symbols.pInventoryVtable,
+        symbols.pItemInstanceHurtAndBreak,
+        symbols.pAbstractContainerMenuBroadcastChanges,
+        symbols.pEntityGetLookAngle,
+        symbols.pLivingEntityGetViewVector,
+        symbols.pEntityLerpMotion,
+        symbols.pEntitySetPos);
 
     if (symbols.pLoadUVs && symbols.pSimpleIconCtor && symbols.pOperatorNew)
     {

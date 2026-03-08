@@ -22,6 +22,8 @@ static const char* SYM_ITEMINSTANCE_GETICON = "?getIcon@ItemInstance@@QEAAPEAVIc
 static const char* SYM_ITEMINSTANCE_MINEBLOCK = "?mineBlock@ItemInstance@@QEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
 static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
 static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
+static const char* SYM_SERVER_PLAYER_GAMEMODE_USEITEM = "?useItem@ServerPlayerGameMode@@QEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
+static const char* SYM_MULTI_PLAYER_GAMEMODE_USEITEM = "?useItem@MultiPlayerGameMode@@UEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
 static const char* SYM_TEXTURES_BIND_RESOURCE = "?bindTexture@Textures@@QEAAXPEAVResourceLocation@@@Z";
 static const char* SYM_TEXTURES_LOAD_BY_NAME = "?loadTexture@Textures@@AEAAHW4_TEXTURE_NAME@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
 static const char* SYM_TEXTURES_LOAD_BY_INDEX_PUBLIC = "?loadTexture@Textures@@QEAAHH@Z";
@@ -30,6 +32,19 @@ static const char* SYM_STITCHED_GETU0 = "?getU0@StitchedTexture@@UEBAM_N@Z";
 static const char* SYM_STITCHED_GETU1 = "?getU1@StitchedTexture@@UEBAM_N@Z";
 static const char* SYM_STITCHED_GETV0 = "?getV0@StitchedTexture@@UEBAM_N@Z";
 static const char* SYM_STITCHED_GETV1 = "?getV1@StitchedTexture@@UEBAM_N@Z";
+static const char* SYM_MINECRAFT_SETLEVEL = "?setLevel@Minecraft@@QEAAXPEAVMultiPlayerLevel@@HV?$shared_ptr@VPlayer@@@std@@_N2@Z";
+static const char* SYM_LEVEL_ADDENTITY = "?addEntity@Level@@UEAA_NV?$shared_ptr@VEntity@@@std@@@Z";
+static const char* SYM_ENTITYIO_NEWBYID = "?newById@EntityIO@@SA?AV?$shared_ptr@VEntity@@@std@@HPEAVLevel@@@Z";
+static const char* SYM_ENTITY_MOVETO = "?moveTo@Entity@@QEAAXNNNMM@Z";
+static const char* SYM_ENTITY_SETPOS = "?setPos@Entity@@QEAAXNNN@Z";
+static const char* SYM_LIVINGENTITY_GETLOOKANGLE = "?getLookAngle@LivingEntity@@UEAAPEAVVec3@@XZ";
+static const char* SYM_LIVINGENTITY_GETVIEWVECTOR = "?getViewVector@LivingEntity@@UEAAPEAVVec3@@M@Z";
+static const char* SYM_ENTITY_GETLOOKANGLE = "?getLookAngle@Entity@@UEAAPEAVVec3@@XZ";
+static const char* SYM_ENTITY_LERPMOTION = "?lerpMotion@Entity@@UEAAXNNN@Z";
+static const char* SYM_INVENTORY_REMOVERESOURCE = "?removeResource@Inventory@@QEAA_NH@Z";
+static const char* SYM_INVENTORY_VFTABLE = "??_7Inventory@@6B@";
+static const char* SYM_ITEMINSTANCE_HURTANDBREAK = "?hurtAndBreak@ItemInstance@@QEAAXHV?$shared_ptr@VLivingEntity@@@std@@@Z";
+static const char* SYM_ABSTRACTCONTAINERMENU_BROADCASTCHANGES = "?broadcastChanges@AbstractContainerMenu@@UEAAXXZ";
 static const char* SYM_TEXATLAS_BLOCKS = "?LOCATION_BLOCKS@TextureAtlas@@2VResourceLocation@@A";
 static const char* SYM_TEXATLAS_ITEMS = "?LOCATION_ITEMS@TextureAtlas@@2VResourceLocation@@A";
 
@@ -106,6 +121,8 @@ bool SymbolResolver::ResolveGameFunctions()
     pItemInstanceMineBlock = Resolve(SYM_ITEMINSTANCE_MINEBLOCK);
     pItemMineBlock = Resolve(SYM_ITEM_MINEBLOCK);
     pDiggerItemMineBlock = Resolve(SYM_DIGGERITEM_MINEBLOCK);
+    pServerPlayerGameModeUseItem = Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEM);
+    pMultiPlayerGameModeUseItem = Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEM);
     pTexturesBindTextureResource = Resolve(SYM_TEXTURES_BIND_RESOURCE);
     pTexturesLoadTextureByName = Resolve(SYM_TEXTURES_LOAD_BY_NAME);
     pTexturesLoadTextureByIndex = Resolve(SYM_TEXTURES_LOAD_BY_INDEX_PUBLIC);
@@ -115,6 +132,20 @@ bool SymbolResolver::ResolveGameFunctions()
     pStitchedGetU1 = Resolve(SYM_STITCHED_GETU1);
     pStitchedGetV0 = Resolve(SYM_STITCHED_GETV0);
     pStitchedGetV1 = Resolve(SYM_STITCHED_GETV1);
+    pMinecraftSetLevel = Resolve(SYM_MINECRAFT_SETLEVEL);
+    pLevelAddEntity = Resolve(SYM_LEVEL_ADDENTITY);
+    pEntityIONewById = Resolve(SYM_ENTITYIO_NEWBYID);
+    pEntityMoveTo = Resolve(SYM_ENTITY_MOVETO);
+    pEntitySetPos = Resolve(SYM_ENTITY_SETPOS);
+    pEntityGetLookAngle = Resolve(SYM_LIVINGENTITY_GETLOOKANGLE);
+    pLivingEntityGetViewVector = Resolve(SYM_LIVINGENTITY_GETVIEWVECTOR);
+    if (!pEntityGetLookAngle)
+        pEntityGetLookAngle = Resolve(SYM_ENTITY_GETLOOKANGLE);
+    pEntityLerpMotion = Resolve(SYM_ENTITY_LERPMOTION);
+    pInventoryRemoveResource = Resolve(SYM_INVENTORY_REMOVERESOURCE);
+    pInventoryVtable = Resolve(SYM_INVENTORY_VFTABLE);
+    pItemInstanceHurtAndBreak = Resolve(SYM_ITEMINSTANCE_HURTANDBREAK);
+    pAbstractContainerMenuBroadcastChanges = Resolve(SYM_ABSTRACTCONTAINERMENU_BROADCASTCHANGES);
     pTextureAtlasLocationBlocks = Resolve(SYM_TEXATLAS_BLOCKS);
     pTextureAtlasLocationItems = Resolve(SYM_TEXATLAS_ITEMS);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140.dll"), SYM_OPERATOR_NEW);
@@ -147,6 +178,8 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("ItemInstance::mineBlock", pItemInstanceMineBlock);
     logSym("Item::mineBlock", pItemMineBlock);
     logSym("DiggerItem::mineBlock", pDiggerItemMineBlock);
+    logSym("ServerPlayerGameMode::useItem", pServerPlayerGameModeUseItem);
+    logSym("MultiPlayerGameMode::useItem", pMultiPlayerGameModeUseItem);
     logSym("Textures::bindTexture(ResourceLocation)", pTexturesBindTextureResource);
     logSym("Textures::loadTexture(TEXTURE_NAME,wstring)", pTexturesLoadTextureByName);
     logSym("Textures::loadTexture(int)", pTexturesLoadTextureByIndex);
@@ -154,6 +187,18 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("StitchedTexture::getU1", pStitchedGetU1);
     logSym("StitchedTexture::getV0", pStitchedGetV0);
     logSym("StitchedTexture::getV1", pStitchedGetV1);
+    logSym("Minecraft::setLevel", pMinecraftSetLevel);
+    logSym("Level::addEntity", pLevelAddEntity);
+    logSym("EntityIO::newById", pEntityIONewById);
+    logSym("Entity::moveTo", pEntityMoveTo);
+    logSym("Entity::setPos", pEntitySetPos);
+    logSym("LivingEntity/Entity::getLookAngle", pEntityGetLookAngle);
+    logSym("LivingEntity::getViewVector", pLivingEntityGetViewVector);
+    logSym("Entity::lerpMotion", pEntityLerpMotion);
+    logSym("Inventory::removeResource", pInventoryRemoveResource);
+    logSym("Inventory::vftable", pInventoryVtable);
+    logSym("ItemInstance::hurtAndBreak", pItemInstanceHurtAndBreak);
+    logSym("AbstractContainerMenu::broadcastChanges", pAbstractContainerMenuBroadcastChanges);
     logSym("TextureAtlas::LOCATION_BLOCKS", pTextureAtlasLocationBlocks);
     logSym("TextureAtlas::LOCATION_ITEMS", pTextureAtlasLocationItems);
 

@@ -10,6 +10,9 @@
 #include <cstdio>
 #include <cstring>
 #include <cwctype>
+#include <memory>
+#include <cstddef>
+#include <vector>
 
 namespace GameHooks
 {
@@ -29,6 +32,9 @@ namespace GameHooks
     ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock = nullptr;
     ItemMineBlock_fn       Original_ItemMineBlock = nullptr;
     ItemMineBlock_fn       Original_DiggerItemMineBlock = nullptr;
+    GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem = nullptr;
+    GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem = nullptr;
+    MinecraftSetLevel_fn   Original_MinecraftSetLevel = nullptr;
     TexturesBindTextureResource_fn Original_TexturesBindTextureResource = nullptr;
     TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName = nullptr;
     TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex = nullptr;
@@ -37,6 +43,29 @@ namespace GameHooks
     StitchedTextureUV_fn   Original_StitchedGetV0 = nullptr;
     StitchedTextureUV_fn   Original_StitchedGetV1 = nullptr;
     static int s_itemMineBlockHookCalls = 0;
+    static void* s_currentLevel = nullptr;
+    static thread_local void* s_activeUseLevel = nullptr;
+    static LevelAddEntity_fn s_levelAddEntity = nullptr;
+    static EntityIONewById_fn s_entityIoNewById = nullptr;
+    static EntityMoveTo_fn s_entityMoveTo = nullptr;
+    static EntitySetPos_fn s_entitySetPos = nullptr;
+    static EntityGetLookAngle_fn s_entityGetLookAngle = nullptr;
+    static LivingEntityGetViewVector_fn s_livingEntityGetViewVector = nullptr;
+    static EntityLerpMotion_fn s_entityLerpMotion = nullptr;
+    static InventoryRemoveResource_fn s_inventoryRemoveResource = nullptr;
+    static void* s_inventoryVtable = nullptr;
+    static ItemInstanceHurtAndBreak_fn s_itemInstanceHurtAndBreak = nullptr;
+    // Verified from compiled Player::inventory accesses in this game build.
+    static constexpr ptrdiff_t kPlayerInventoryOffset = 0x340;
+    static constexpr ptrdiff_t kLevelIsClientSideOffset = 0x268;
+    static constexpr ptrdiff_t kEntityXOffset = 0x78;
+    static constexpr ptrdiff_t kEntityYOffset = 0x80;
+    static constexpr ptrdiff_t kEntityZOffset = 0x88;
+    static constexpr ptrdiff_t kEntityRemovedOffset = 0xC7;
+    static constexpr ptrdiff_t kFireballOwnerOffset = 0x1D0;
+    static constexpr ptrdiff_t kFireballXPowerOffset = 0x1E8;
+    static constexpr ptrdiff_t kFireballYPowerOffset = 0x1F0;
+    static constexpr ptrdiff_t kFireballZPowerOffset = 0x1F8;
     static void* s_textureAtlasLocationBlocks = nullptr;
     static void* s_textureAtlasLocationItems = nullptr;
     static int s_textureAtlasIdBlocks = -1;
@@ -60,6 +89,12 @@ namespace GameHooks
     static bool s_pageResourceInit = false;
     static int s_pageRouteLogCount = 0;
     static int s_forcedTerrainRouteLogCount = 0;
+    static uintptr_t s_gameModuleBase = 0;
+    static uintptr_t s_gameModuleEnd = 0;
+    static std::vector<void*> s_spawnedEntities;
+    static int s_outOfWorldGuardLogCount = 0;
+    static int s_pendingServerUseItemId = -1;
+    static ULONGLONG s_pendingServerUseExpiryMs = 0;
 
     static void EnsurePageResourcesInitialized()
     {
@@ -69,6 +104,73 @@ namespace GameHooks
         s_pageResource.path = L"";
         s_pageResource.preloaded = false;
         s_pageResourceInit = true;
+    }
+
+    static void EnsureGameModuleRange()
+    {
+        if (s_gameModuleBase != 0 && s_gameModuleEnd > s_gameModuleBase)
+            return;
+
+        HMODULE exe = GetModuleHandleW(nullptr);
+        if (!exe)
+            return;
+
+        auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(exe);
+        if (!dos || dos->e_magic != IMAGE_DOS_SIGNATURE)
+            return;
+
+        auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(
+            reinterpret_cast<unsigned char*>(exe) + dos->e_lfanew);
+        if (!nt || nt->Signature != IMAGE_NT_SIGNATURE)
+            return;
+
+        s_gameModuleBase = reinterpret_cast<uintptr_t>(exe);
+        s_gameModuleEnd = s_gameModuleBase + nt->OptionalHeader.SizeOfImage;
+    }
+
+    static bool IsCanonicalUserPtr(const void* ptr)
+    {
+        uintptr_t p = reinterpret_cast<uintptr_t>(ptr);
+        if (p < 0x10000ULL)
+            return false;
+        // User-mode canonical range on x64 Windows.
+        if (p >= 0x0000800000000000ULL)
+            return false;
+        return true;
+    }
+
+    static bool IsGameCodePtr(const void* ptr)
+    {
+        if (!ptr)
+            return false;
+        EnsureGameModuleRange();
+        if (s_gameModuleBase == 0 || s_gameModuleEnd <= s_gameModuleBase)
+            return false;
+        uintptr_t p = reinterpret_cast<uintptr_t>(ptr);
+        return p >= s_gameModuleBase && p < s_gameModuleEnd;
+    }
+
+    static bool IsReadableRange(const void* ptr, size_t bytes)
+    {
+        if (!ptr || bytes == 0 || !IsCanonicalUserPtr(ptr))
+            return false;
+
+        MEMORY_BASIC_INFORMATION mbi{};
+        if (VirtualQuery(ptr, &mbi, sizeof(mbi)) != sizeof(mbi))
+            return false;
+        if (mbi.State != MEM_COMMIT || mbi.Protect == PAGE_NOACCESS || (mbi.Protect & PAGE_GUARD))
+            return false;
+
+        const DWORD readMask = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY |
+                               PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+        if ((mbi.Protect & readMask) == 0)
+            return false;
+
+        uintptr_t p = reinterpret_cast<uintptr_t>(ptr);
+        uintptr_t end = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+        if (p + bytes < p)
+            return false;
+        return (p + bytes) <= end;
     }
 
     static std::wstring BuildVirtualAtlasPath(int atlasType, int page)
@@ -193,6 +295,20 @@ namespace GameHooks
         int z;
     };
 
+    struct UseItemNativeArgs
+    {
+        int itemId;
+        int isTestUseOnly;
+        int isClientSide;
+        void* itemInstancePtr;
+        void* playerPtr;
+        void* playerSharedPtr;
+    };
+
+    static bool IsFireballFamilyEntityId(int entityNumericId);
+    static void* DecodeItemInstancePtrFromSharedArg(void* sharedArg);
+    static void* DecodePlayerPtrFromSharedArg(void* sharedArg);
+
     static bool TryReadItemId(void* itemInstancePtr, int& outItemId)
     {
         if (!itemInstancePtr)
@@ -203,16 +319,16 @@ namespace GameHooks
         static const int kCandidateOffsets[] = { 0x20, 0x18, 0x10, 0x28 };
         for (int off : kCandidateOffsets)
         {
-            __try
+            const char* idPtr = static_cast<char*>(itemInstancePtr) + off;
+            if (!IsReadableRange(idPtr, sizeof(int)))
+                continue;
+
+            int id = *reinterpret_cast<const int*>(idPtr);
+            if (id > 0 && id < 32000)
             {
-                int id = *reinterpret_cast<int*>(static_cast<char*>(itemInstancePtr) + off);
-                if (id > 0 && id < 32000)
-                {
-                    outItemId = id;
-                    return true;
-                }
+                outItemId = id;
+                return true;
             }
-            __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
 
         return false;
@@ -230,6 +346,386 @@ namespace GameHooks
         MineBlockNativeArgs args{ itemId, tile, x, y, z };
         int action = DotNetHost::CallItemMineBlock(&args, sizeof(args));
         return action;
+    }
+
+    static int TryDispatchUseItemFromSharedItemArg(void* itemInstanceSharedPtr, void* playerSharedPtr, bool bTestUseOnly, const char* sourceTag)
+    {
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+        if (!itemInstancePtr)
+            return 0;
+
+        int itemId = 0;
+        if (!TryReadItemId(itemInstancePtr, itemId))
+            return 0;
+
+        int isClientSide = 0;
+        if (s_activeUseLevel &&
+            IsReadableRange(static_cast<char*>(s_activeUseLevel) + kLevelIsClientSideOffset, sizeof(bool)))
+        {
+            isClientSide =
+                *reinterpret_cast<bool*>(static_cast<char*>(s_activeUseLevel) + kLevelIsClientSideOffset) ? 1 : 0;
+        }
+
+        UseItemNativeArgs args{ itemId, bTestUseOnly ? 1 : 0, isClientSide, itemInstancePtr, playerPtr, playerSharedPtr };
+        return DotNetHost::CallItemUse(&args, sizeof(args));
+    }
+
+    void SetSummonSymbols(void* levelAddEntity,
+                          void* entityIoNewById,
+                          void* entityMoveTo,
+                          void* entitySetPos)
+    {
+        s_levelAddEntity = reinterpret_cast<LevelAddEntity_fn>(levelAddEntity);
+        s_entityIoNewById = reinterpret_cast<EntityIONewById_fn>(entityIoNewById);
+        s_entityMoveTo = reinterpret_cast<EntityMoveTo_fn>(entityMoveTo);
+        s_entitySetPos = reinterpret_cast<EntitySetPos_fn>(entitySetPos);
+    }
+
+    void SetUseActionSymbols(void* inventoryRemoveResource,
+                             void* inventoryVtable,
+                             void* itemInstanceHurtAndBreak,
+                             void* containerBroadcastChanges,
+                             void* entityGetLookAngle,
+                             void* livingEntityGetViewVector,
+                             void* entityLerpMotion,
+                             void* entitySetPos)
+    {
+        s_inventoryRemoveResource = reinterpret_cast<InventoryRemoveResource_fn>(inventoryRemoveResource);
+        s_inventoryVtable = inventoryVtable;
+        s_itemInstanceHurtAndBreak = reinterpret_cast<ItemInstanceHurtAndBreak_fn>(itemInstanceHurtAndBreak);
+        s_entityGetLookAngle = reinterpret_cast<EntityGetLookAngle_fn>(entityGetLookAngle);
+        s_livingEntityGetViewVector = reinterpret_cast<LivingEntityGetViewVector_fn>(livingEntityGetViewVector);
+        s_entityLerpMotion = reinterpret_cast<EntityLerpMotion_fn>(entityLerpMotion);
+        s_entitySetPos = reinterpret_cast<EntitySetPos_fn>(entitySetPos);
+    }
+
+    static bool IsInventoryObjectPtr(void* objectPtr)
+    {
+        if (!objectPtr || !s_inventoryVtable || !IsReadableRange(objectPtr, sizeof(void*)))
+            return false;
+
+        void* vt = *reinterpret_cast<void**>(objectPtr);
+        if (!IsCanonicalUserPtr(vt))
+            return false;
+        return vt == s_inventoryVtable;
+    }
+
+    static void* FindInventoryPtrFromPlayer(void* playerPtr)
+    {
+        if (!playerPtr || !s_inventoryRemoveResource || !IsCanonicalUserPtr(playerPtr))
+            return nullptr;
+
+        const char* base = static_cast<const char*>(playerPtr);
+        const void* slotPtr = base + kPlayerInventoryOffset;
+        if (!IsReadableRange(slotPtr, sizeof(void*)))
+            return nullptr;
+
+        void* inventoryPtr = *reinterpret_cast<void* const*>(slotPtr);
+        if (!IsInventoryObjectPtr(inventoryPtr))
+            return nullptr;
+
+        return inventoryPtr;
+    }
+
+    bool ConsumePlayerResource(void* playerPtr, int itemId, int count)
+    {
+        static int s_consumeFailLogCount = 0;
+        if (!playerPtr || !s_inventoryRemoveResource || !s_inventoryVtable || itemId < 0 || count <= 0)
+            return false;
+
+        void* inventoryPtr = FindInventoryPtrFromPlayer(playerPtr);
+        if (!inventoryPtr)
+        {
+            if (s_consumeFailLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] ConsumePlayerResource: no inventory ptr (player=%p item=%d count=%d)",
+                             playerPtr, itemId, count);
+                s_consumeFailLogCount++;
+            }
+            return false;
+        }
+
+        for (int i = 0; i < count; ++i)
+        {
+            __try
+            {
+                if (!s_inventoryRemoveResource(inventoryPtr, itemId))
+                {
+                    if (s_consumeFailLogCount < 20)
+                    {
+                        LogUtil::Log("[WeaveLoader] ConsumePlayerResource: removeResource false (inv=%p item=%d)",
+                                     inventoryPtr, itemId);
+                        s_consumeFailLogCount++;
+                    }
+                    return false;
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                if (s_consumeFailLogCount < 20)
+                {
+                    LogUtil::Log("[WeaveLoader] ConsumePlayerResource: exception (inv=%p item=%d)", inventoryPtr, itemId);
+                    s_consumeFailLogCount++;
+                }
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool DamageItemInstance(void* itemInstancePtr, int amount, void* ownerSharedPtr)
+    {
+        if (!itemInstancePtr || !ownerSharedPtr || amount <= 0 || !s_itemInstanceHurtAndBreak)
+            return false;
+
+        __try
+        {
+            s_itemInstanceHurtAndBreak(itemInstancePtr, amount, ownerSharedPtr);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+    }
+
+    static bool TryReadLookVector(void* playerPtr, double& dx, double& dy, double& dz)
+    {
+        dx = 0.0;
+        dy = 0.0;
+        dz = 0.0;
+        if (!playerPtr)
+            return false;
+
+        void* vec = nullptr;
+        if (s_livingEntityGetViewVector)
+            vec = s_livingEntityGetViewVector(playerPtr, 1.0f);
+        else if (s_entityGetLookAngle)
+            vec = s_entityGetLookAngle(playerPtr);
+
+        if (!IsReadableRange(vec, sizeof(double) * 3))
+            return false;
+
+        dx = *reinterpret_cast<double*>(static_cast<char*>(vec) + 0x00);
+        dy = *reinterpret_cast<double*>(static_cast<char*>(vec) + 0x08);
+        dz = *reinterpret_cast<double*>(static_cast<char*>(vec) + 0x10);
+        return true;
+    }
+
+    static bool LooksLikeEntityPtr(void* candidate)
+    {
+        if (!candidate || !IsReadableRange(candidate, sizeof(void*)))
+            return false;
+        void* vt = *reinterpret_cast<void**>(candidate);
+        if (!IsCanonicalUserPtr(vt))
+            return false;
+        if (!IsGameCodePtr(vt))
+            return false;
+        return true;
+    }
+
+    static bool TryReadPlayerPos(void* playerPtr, double& x, double& y, double& z)
+    {
+        x = y = z = 0.0;
+        if (!playerPtr)
+            return false;
+
+        char* base = static_cast<char*>(playerPtr);
+        if (!IsReadableRange(base + kEntityXOffset, sizeof(double)) ||
+            !IsReadableRange(base + kEntityYOffset, sizeof(double)) ||
+            !IsReadableRange(base + kEntityZOffset, sizeof(double)))
+            return false;
+
+        x = *reinterpret_cast<double*>(base + kEntityXOffset);
+        y = *reinterpret_cast<double*>(base + kEntityYOffset);
+        z = *reinterpret_cast<double*>(base + kEntityZOffset);
+        return x > -32000000.0 && x < 32000000.0 &&
+               y > -2048.0 && y < 4096.0 &&
+               z > -32000000.0 && z < 32000000.0;
+    }
+
+    static bool IsEntityMarkedRemoved(void* entityPtr)
+    {
+        if (!entityPtr || !IsReadableRange(static_cast<char*>(entityPtr) + kEntityRemovedOffset, sizeof(bool)))
+            return true;
+        return *reinterpret_cast<bool*>(static_cast<char*>(entityPtr) + kEntityRemovedOffset);
+    }
+
+    static void MarkEntityRemoved(void* entityPtr)
+    {
+        if (!entityPtr || !IsReadableRange(static_cast<char*>(entityPtr) + kEntityRemovedOffset, sizeof(bool)))
+            return;
+        *reinterpret_cast<bool*>(static_cast<char*>(entityPtr) + kEntityRemovedOffset) = true;
+    }
+
+    static void TrackSpawnedEntity(void* entityPtr)
+    {
+        if (!entityPtr)
+            return;
+        s_spawnedEntities.push_back(entityPtr);
+    }
+
+    static void CullSpawnedEntitiesBelowWorld()
+    {
+        if (s_spawnedEntities.empty())
+            return;
+
+        size_t write = 0;
+        for (size_t read = 0; read < s_spawnedEntities.size(); ++read)
+        {
+            void* entityPtr = s_spawnedEntities[read];
+            if (!entityPtr || !LooksLikeEntityPtr(entityPtr))
+                continue;
+
+            if (IsEntityMarkedRemoved(entityPtr))
+                continue;
+
+            double x = 0.0, y = 0.0, z = 0.0;
+            if (!TryReadPlayerPos(entityPtr, x, y, z))
+                continue;
+
+            if (y < -1.0)
+            {
+                MarkEntityRemoved(entityPtr);
+                if (s_outOfWorldGuardLogCount < 20)
+                {
+                    LogUtil::Log("[WeaveLoader] OutOfWorldGuard: removed spawned entity=%p at y=%.3f", entityPtr, y);
+                    s_outOfWorldGuardLogCount++;
+                }
+                continue;
+            }
+
+            s_spawnedEntities[write++] = entityPtr;
+        }
+
+        s_spawnedEntities.resize(write);
+    }
+
+    bool SummonEntityFromPlayerLook(void* playerPtr,
+                                    void* playerSharedPtr,
+                                    int entityNumericId,
+                                    double speed,
+                                    double spawnForward,
+                                    double spawnUp)
+    {
+        static int s_summonFailLogCount = 0;
+        void* levelPtr = s_activeUseLevel ? s_activeUseLevel : s_currentLevel;
+        if (!levelPtr || !s_levelAddEntity || !playerPtr)
+        {
+            if (s_summonFailLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] SummonFromLook fail: preconditions level=%p add=%p player=%p shared=%p id=%d",
+                             levelPtr, s_levelAddEntity, playerPtr, playerSharedPtr, entityNumericId);
+                s_summonFailLogCount++;
+            }
+            return false;
+        }
+
+        double dx = 0.0, dy = 0.0, dz = 0.0;
+        if (!TryReadLookVector(playerPtr, dx, dy, dz))
+        {
+            if (s_summonFailLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] SummonFromLook fail: look vector unavailable (player=%p)", playerPtr);
+                s_summonFailLogCount++;
+            }
+            return false;
+        }
+
+        double px = 0.0, py = 0.0, pz = 0.0;
+        if (!TryReadPlayerPos(playerPtr, px, py, pz))
+        {
+            if (s_summonFailLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] SummonFromLook fail: player position unavailable (player=%p)", playerPtr);
+                s_summonFailLogCount++;
+            }
+            return false;
+        }
+
+        const double sx = px + (dx * spawnForward);
+        const double sy = py + spawnUp + (dy * spawnForward);
+        const double sz = pz + (dz * spawnForward);
+
+        std::shared_ptr<void> entity;
+
+        if (!s_entityIoNewById)
+        {
+            if (s_summonFailLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] SummonFromLook fail: newById unavailable (id=%d)", entityNumericId);
+                s_summonFailLogCount++;
+            }
+            return false;
+        }
+
+        s_entityIoNewById(&entity, entityNumericId, levelPtr);
+        if (!entity)
+        {
+            if (s_summonFailLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] SummonFromLook fail: EntityIO::newById returned null (id=%d)", entityNumericId);
+                s_summonFailLogCount++;
+            }
+            return false;
+        }
+
+        if (s_entityMoveTo)
+            s_entityMoveTo(entity.get(), sx, sy, sz, 0.0f, 0.0f);
+        else if (s_entitySetPos)
+            s_entitySetPos(entity.get(), sx, sy, sz);
+
+        if (s_entityLerpMotion)
+            s_entityLerpMotion(entity.get(), dx * speed, dy * speed, dz * speed);
+
+        if (IsFireballFamilyEntityId(entityNumericId) &&
+            IsReadableRange(entity.get(), kFireballZPowerOffset + sizeof(double)))
+        {
+            // Source + PDB: Fireball packets initialize xPower/yPower/zPower separately from xd/yd/zd.
+            // EntityIO::newById gives us a game-owned shared_ptr<Entity>; patch the fireball fields in place.
+            *reinterpret_cast<void**>(static_cast<char*>(entity.get()) + kFireballOwnerOffset) = nullptr;
+            *reinterpret_cast<double*>(static_cast<char*>(entity.get()) + kFireballXPowerOffset) = dx * 0.10;
+            *reinterpret_cast<double*>(static_cast<char*>(entity.get()) + kFireballYPowerOffset) = dy * 0.10;
+            *reinterpret_cast<double*>(static_cast<char*>(entity.get()) + kFireballZPowerOffset) = dz * 0.10;
+        }
+
+        bool added = s_levelAddEntity(levelPtr, &entity);
+        if (!added && s_summonFailLogCount < 20)
+        {
+            LogUtil::Log("[WeaveLoader] SummonFromLook fail: Level::addEntity returned false (id=%d)", entityNumericId);
+            s_summonFailLogCount++;
+        }
+        if (added)
+        {
+            TrackSpawnedEntity(entity.get());
+            DotNetHost::CallEntitySummoned(entityNumericId, static_cast<float>(sx), static_cast<float>(sy), static_cast<float>(sz));
+        }
+        return added;
+    }
+
+    bool SummonEntityByNumericId(int entityNumericId, double x, double y, double z)
+    {
+        void* levelPtr = s_activeUseLevel ? s_activeUseLevel : s_currentLevel;
+        if (!levelPtr || !s_levelAddEntity || !s_entityIoNewById)
+            return false;
+
+        std::shared_ptr<void> entity;
+        s_entityIoNewById(&entity, entityNumericId, levelPtr);
+        if (!entity)
+            return false;
+
+        if (s_entityMoveTo)
+            s_entityMoveTo(entity.get(), x, y, z, 0.0f, 0.0f);
+
+        bool added = s_levelAddEntity(levelPtr, &entity);
+        if (added)
+        {
+            TrackSpawnedEntity(entity.get());
+            DotNetHost::CallEntitySummoned(entityNumericId, static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+        }
+        return added;
     }
 
     void SetAtlasLocationPointers(void* blocksLocation, void* itemsLocation)
@@ -250,16 +746,34 @@ namespace GameHooks
         LogUtil::Log("[WeaveLoader] Atlas IDs: blocks=%d items=%d", s_textureAtlasIdBlocks, s_textureAtlasIdItems);
     }
 
+    static bool TryReadVec3(void* vecPtr, double& x, double& y, double& z)
+    {
+        if (!IsReadableRange(vecPtr, sizeof(double) * 3))
+            return false;
+        x = *reinterpret_cast<double*>(static_cast<char*>(vecPtr) + 0x00);
+        y = *reinterpret_cast<double*>(static_cast<char*>(vecPtr) + 0x08);
+        z = *reinterpret_cast<double*>(static_cast<char*>(vecPtr) + 0x10);
+        return true;
+    }
+
+    static bool IsFireballFamilyEntityId(int entityNumericId)
+    {
+        return entityNumericId == 12
+            || entityNumericId == 13
+            || entityNumericId == 19
+            || entityNumericId == 1000;
+    }
+
     static void* DecodeItemInstancePtrFromSharedArg(void* sharedArg)
     {
-        if (!sharedArg)
+        if (!sharedArg || !IsCanonicalUserPtr(sharedArg))
             return nullptr;
 
         // Candidate A: shared_ptr<ItemInstance> object where first field is raw ItemInstance*.
         __try
         {
             void* p = *reinterpret_cast<void**>(sharedArg);
-            if (p)
+            if (p && IsCanonicalUserPtr(p))
             {
                 int id = 0;
                 if (TryReadItemId(p, id)) return p;
@@ -274,6 +788,37 @@ namespace GameHooks
             if (TryReadItemId(sharedArg, id)) return sharedArg;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        return nullptr;
+    }
+
+    static void* DecodePlayerPtrFromSharedArg(void* sharedArg)
+    {
+        static int s_decodePlayerLogCount = 0;
+        if (!sharedArg || !IsCanonicalUserPtr(sharedArg))
+            return nullptr;
+
+        // shared_ptr<Player> is passed by reference; first field is raw Player*.
+        __try
+        {
+            void* p = *reinterpret_cast<void**>(sharedArg);
+            if (LooksLikeEntityPtr(p))
+            {
+                if (s_decodePlayerLogCount < 8)
+                {
+                    LogUtil::Log("[WeaveLoader] DecodePlayer: shared=%p -> player=%p", sharedArg, p);
+                    s_decodePlayerLogCount++;
+                }
+                return p;
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        if (s_decodePlayerLogCount < 8)
+        {
+            LogUtil::Log("[WeaveLoader] DecodePlayer: failed shared=%p", sharedArg);
+            s_decodePlayerLogCount++;
+        }
 
         return nullptr;
     }
@@ -510,6 +1055,79 @@ namespace GameHooks
         return false;
     }
 
+    bool __fastcall Hooked_ServerPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly)
+    {
+        void* previousLevel = s_activeUseLevel;
+        s_activeUseLevel = level;
+        static int s_serverUseLogCount = 0;
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        int itemId = -1;
+        TryReadItemId(itemInstancePtr, itemId);
+        bool effectiveTestUseOnly = bTestUseOnly;
+        const ULONGLONG nowMs = GetTickCount64();
+        if (effectiveTestUseOnly &&
+            itemId >= 0 &&
+            s_pendingServerUseItemId == itemId &&
+            nowMs <= s_pendingServerUseExpiryMs)
+        {
+            effectiveTestUseOnly = false;
+            s_pendingServerUseItemId = -1;
+            s_pendingServerUseExpiryMs = 0;
+        }
+        if (s_serverUseLogCount < 40)
+        {
+            LogUtil::Log("[WeaveLoader] UseHook ServerPlayerGameMode::useItem test=%d effective=%d item=%d itemPtr=%p playerShared=%p level=%p",
+                         bTestUseOnly ? 1 : 0, effectiveTestUseOnly ? 1 : 0, itemId, itemInstancePtr, playerSharedPtr, level);
+            s_serverUseLogCount++;
+        }
+        int action = TryDispatchUseItemFromSharedItemArg(itemInstanceSharedPtr, playerSharedPtr, effectiveTestUseOnly, "ServerPlayerGameMode::useItem");
+        s_activeUseLevel = previousLevel;
+        if (action == 2)
+            return true;
+
+        if (Original_ServerPlayerGameModeUseItem)
+            return Original_ServerPlayerGameModeUseItem(thisPtr, playerSharedPtr, level, itemInstanceSharedPtr, bTestUseOnly);
+        return false;
+    }
+
+    bool __fastcall Hooked_MultiPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly)
+    {
+        static int s_multiUseLogCount = 0;
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        int itemId = -1;
+        TryReadItemId(itemInstancePtr, itemId);
+        if (!bTestUseOnly && itemId >= 0)
+        {
+            s_pendingServerUseItemId = itemId;
+            s_pendingServerUseExpiryMs = GetTickCount64() + 1000;
+        }
+        if (s_multiUseLogCount < 40)
+        {
+            LogUtil::Log("[WeaveLoader] UseHook MultiPlayerGameMode::useItem test=%d item=%d itemPtr=%p playerShared=%p level=%p",
+                         bTestUseOnly ? 1 : 0, itemId, itemInstancePtr, playerSharedPtr, level);
+            s_multiUseLogCount++;
+        }
+        void* previousLevel = s_activeUseLevel;
+        s_activeUseLevel = level;
+        int action = TryDispatchUseItemFromSharedItemArg(itemInstanceSharedPtr, playerSharedPtr, bTestUseOnly, "MultiPlayerGameMode::useItem");
+        s_activeUseLevel = previousLevel;
+        if (action == 2)
+            return true;
+        if (Original_MultiPlayerGameModeUseItem)
+            return Original_MultiPlayerGameModeUseItem(thisPtr, playerSharedPtr, level, itemInstanceSharedPtr, bTestUseOnly);
+        return false;
+    }
+
+    void __fastcall Hooked_MinecraftSetLevel(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut)
+    {
+        if (Original_MinecraftSetLevel)
+        {
+            Original_MinecraftSetLevel(thisPtr, level, message, forceInsertPlayerSharedPtr, doForceStatsSave, bPrimaryPlayerSignedOut);
+        }
+
+        s_currentLevel = level;
+    }
+
     void* Hooked_GetResourceAsStream(const void* fileName)
     {
         const std::wstring* path = static_cast<const std::wstring*>(fileName);
@@ -587,7 +1205,9 @@ namespace GameHooks
 
     void __fastcall Hooked_MinecraftTick(void* thisPtr, bool bFirst, bool bUpdateTextures)
     {
+        CullSpawnedEntitiesBelowWorld();
         Original_MinecraftTick(thisPtr, bFirst, bUpdateTextures);
+        CullSpawnedEntitiesBelowWorld();
 
         if (bFirst)
         {

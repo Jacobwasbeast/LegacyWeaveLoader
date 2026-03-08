@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using WeaveLoader.API;
+using WeaveLoader.API.Events;
 using WeaveLoader.API.Item;
 
 namespace WeaveLoader.Core;
@@ -103,6 +104,87 @@ public static class WeaveLoaderCore
         catch (Exception ex)
         {
             Logger.Error($"OnItemMineBlock EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnItemUse(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleUseItem(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemUse EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WorldLoadedNativeArgs
+    {
+        public IntPtr LevelPtr;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EntitySummonedNativeArgs
+    {
+        public int EntityNumericId;
+        public float X;
+        public float Y;
+        public float Z;
+    }
+
+    public static int OnWorldLoaded(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            var native = Marshal.PtrToStructure<WorldLoadedNativeArgs>(args);
+            GameEvents.FireWorldLoaded(new WorldLoadedEventArgs
+            {
+                NativeLevelPointer = native.LevelPtr
+            });
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnWorldLoaded EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnWorldUnloaded(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            GameEvents.FireWorldUnloaded(new WorldUnloadedEventArgs());
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnWorldUnloaded EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnEntitySummoned(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            var native = Marshal.PtrToStructure<EntitySummonedNativeArgs>(args);
+            GameEvents.FireEntitySpawn(new EntitySpawnEventArgs
+            {
+                EntityId = $"entity:{native.EntityNumericId}",
+                X = native.X,
+                Y = native.Y,
+                Z = native.Z
+            });
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnEntitySummoned EXCEPTION: {ex}");
             return 0;
         }
     }
