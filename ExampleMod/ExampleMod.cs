@@ -10,6 +10,13 @@ namespace ExampleMod;
 public class ExampleMod : IMod
 {
     public static RegisteredBlock? RubyOre;
+    public static RegisteredBlock? RubyStone;
+    public static RegisteredBlock? RubyWoodPlanks;
+    public static RegisteredBlock? RubySand;
+    public static RegisteredSlabBlock? RubyStoneSlab;
+    public static RegisteredSlabBlock? RubyWoodSlab;
+    public static RegisteredBlock? RubyLamp;
+    public static RegisteredBlock? RubyLampLit;
     public static RegisteredBlock? Orichalcum;
     public static RegisteredItem? Ruby;
     public static RegisteredItem? RubyPickaxeItem;
@@ -91,6 +98,95 @@ public class ExampleMod : IMod
     {
     }
 
+    private sealed class RubyLampBlock : WeaveLoader.API.Block.Block
+    {
+        private readonly bool _isLit;
+
+        public RubyLampBlock(bool isLit)
+        {
+            _isLit = isLit;
+        }
+
+        public override void OnPlace(BlockUpdateContext context)
+        {
+            if (context.IsClientSide)
+                return;
+
+            if (_isLit)
+            {
+                if (!context.HasNeighborSignal())
+                    context.ScheduleTick(4);
+            }
+            else if (context.HasNeighborSignal())
+            {
+                context.SetBlock(new Identifier("examplemod:ruby_lamp_lit"));
+            }
+        }
+
+        public override void OnNeighborChanged(BlockNeighborChangedContext context)
+        {
+            if (context.Block.IsClientSide)
+                return;
+
+            if (_isLit)
+            {
+                if (!context.Block.HasNeighborSignal())
+                    context.Block.ScheduleTick(4);
+            }
+            else if (context.Block.HasNeighborSignal())
+            {
+                context.Block.SetBlock(new Identifier("examplemod:ruby_lamp_lit"));
+            }
+        }
+
+        public override void OnScheduledTick(BlockTickContext context)
+        {
+            if (!_isLit || context.Block.IsClientSide)
+                return;
+
+            if (!context.Block.HasNeighborSignal())
+                context.Block.SetBlock(new Identifier("examplemod:ruby_lamp"));
+        }
+    }
+
+    private sealed class RubySandBlock : FallingBlock
+    {
+        private static readonly int FlowingLavaId = IdHelper.GetBlockNumericId("minecraft:flowing_lava");
+        private static readonly int LavaId = IdHelper.GetBlockNumericId("minecraft:lava");
+
+        public override void OnPlace(BlockUpdateContext context)
+        {
+            TryHarden(context);
+        }
+
+        public override void OnNeighborChanged(BlockNeighborChangedContext context)
+        {
+            TryHarden(context.Block);
+        }
+
+        private static void TryHarden(BlockUpdateContext context)
+        {
+            if (context.IsClientSide || RubyStone == null)
+                return;
+
+            if (HasLavaAtOrAdjacent(context))
+                context.SetBlock(RubyStone.NumericId);
+        }
+
+        private static bool HasLavaAtOrAdjacent(BlockUpdateContext context)
+        {
+            static bool IsLava(int blockId) => blockId == FlowingLavaId || blockId == LavaId;
+
+            return IsLava(context.GetBlockId()) ||
+                   IsLava(context.GetBlockId(-1, 0, 0)) ||
+                   IsLava(context.GetBlockId(1, 0, 0)) ||
+                   IsLava(context.GetBlockId(0, -1, 0)) ||
+                   IsLava(context.GetBlockId(0, 1, 0)) ||
+                   IsLava(context.GetBlockId(0, 0, -1)) ||
+                   IsLava(context.GetBlockId(0, 0, 1));
+        }
+    }
+
     public void OnInitialize()
     {
         RubyOre = Registry.Block.Register("examplemod:ruby_ore",
@@ -104,6 +200,95 @@ public class ExampleMod : IMod
                 .RequiredHarvestLevel(2)
                 .RequiredTool(ToolType.Pickaxe)
                 .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubyStone = Registry.Block.Register("examplemod:ruby_stone",
+            new BlockProperties()
+                .Material(MaterialType.Stone)
+                .Hardness(1.5f)
+                .Resistance(10f)
+                .Sound(SoundType.Stone)
+                .Icon("examplemod:ruby_stone")
+                .Name("Ruby Stone")
+                .RequiredHarvestLevel(1)
+                .RequiredTool(ToolType.Pickaxe)
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubyWoodPlanks = Registry.Block.Register("examplemod:ruby_wood_planks",
+            new BlockProperties()
+                .Material(MaterialType.Wood)
+                .Hardness(2.0f)
+                .Resistance(5f)
+                .Sound(SoundType.Wood)
+                .Icon("examplemod:ruby_wood_planks")
+                .Name("Ruby Wood Planks")
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubySand = Registry.Block.Register("examplemod:ruby_sand",
+            new RubySandBlock(),
+            new BlockProperties()
+                .Material(MaterialType.Sand)
+                .Hardness(0.5f)
+                .Resistance(2.5f)
+                .Sound(SoundType.Sand)
+                .Icon("examplemod:ruby_sand")
+                .Name("Ruby Sand")
+                .RequiredTool(ToolType.Shovel)
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubyStoneSlab = (RegisteredSlabBlock)Registry.Block.Register("examplemod:ruby_stone_slab",
+            new SlabBlock(),
+            new BlockProperties()
+                .Material(MaterialType.Stone)
+                .Hardness(1.5f)
+                .Resistance(10f)
+                .Sound(SoundType.Stone)
+                .Icon("examplemod:ruby_stone")
+                .Name("Ruby Stone Slab")
+                .RequiredHarvestLevel(1)
+                .RequiredTool(ToolType.Pickaxe)
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubyWoodSlab = (RegisteredSlabBlock)Registry.Block.Register("examplemod:ruby_wood_slab",
+            new SlabBlock(),
+            new BlockProperties()
+                .Material(MaterialType.Wood)
+                .Hardness(2.0f)
+                .Resistance(5f)
+                .Sound(SoundType.Wood)
+                .Icon("examplemod:ruby_wood_planks")
+                .Name("Ruby Wood Slab")
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubyLamp = Registry.Block.Register("examplemod:ruby_lamp", new RubyLampBlock(false),
+            new BlockProperties()
+                .Material(MaterialType.Glass)
+                .Hardness(0.3f)
+                .Resistance(1.5f)
+                .Sound(SoundType.Glass)
+                .Icon("examplemod:ruby_lamp")
+                .Name("Ruby Lamp")
+                .RequiredHarvestLevel(0)
+                .RequiredTool(ToolType.Pickaxe)
+                .AcceptsRedstonePower()
+                .InCreativeTab(CreativeTab.BuildingBlocks));
+
+        RubyLampLit = Registry.Block.Register("examplemod:ruby_lamp_lit",
+            new RubyLampBlock(true)
+            {
+                DropAsBlockId = new Identifier("examplemod:ruby_lamp"),
+                CloneAsBlockId = new Identifier("examplemod:ruby_lamp")
+            },
+            new BlockProperties()
+                .Material(MaterialType.Glass)
+                .Hardness(0.3f)
+                .Resistance(1.5f)
+                .Sound(SoundType.Glass)
+                .Icon("examplemod:ruby_lamp_on")
+                .LightLevel(1.0f)
+                .Name("Ruby Lamp")
+                .RequiredHarvestLevel(0)
+                .RequiredTool(ToolType.Pickaxe)
+                .AcceptsRedstonePower());
 
         Orichalcum = Registry.Block.Register("examplemod:orichalcum_ore",
             new BlockProperties()

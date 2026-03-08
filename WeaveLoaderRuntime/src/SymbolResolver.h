@@ -39,6 +39,29 @@ public:
     void* pPickaxeItemCanDestroySpecial = nullptr; // PickaxeItem::canDestroySpecial(Tile*)
     void* pShovelItemGetDestroySpeed = nullptr; // ShovelItem::getDestroySpeed(shared_ptr<ItemInstance>,Tile*)
     void* pShovelItemCanDestroySpecial = nullptr; // ShovelItem::canDestroySpecial(Tile*)
+    void* pTileOnPlace = nullptr;                // Tile::onPlace(Level*,int,int,int)
+    void* pTileNeighborChanged = nullptr;        // Tile::neighborChanged(Level*,int,int,int,int)
+    void* pTileTick = nullptr;                   // Tile::tick(Level*,int,int,int,Random*)
+    void* pLevelUpdateNeighborsAt = nullptr;     // Level::updateNeighborsAt(int,int,int,int)
+    void* pServerLevelTickPendingTicks = nullptr; // ServerLevel::tickPendingTicks(bool)
+    void* pLevelGetTile = nullptr;               // Level::getTile(int,int,int)
+    void* pLevelSetData = nullptr;               // Level::setData(int,int,int,int,int,bool)
+    void* pTileGetResource = nullptr;            // Tile::getResource(int,Random*,int)
+    void* pTileCloneTileId = nullptr;            // Tile::cloneTileId(Level*,int,int,int)
+    void* pTileGetTextureFaceData = nullptr;     // Tile::getTexture(int,int)
+    void* pStoneSlabGetTexture = nullptr;        // StoneSlabTile::getTexture(int,int)
+    void* pWoodSlabGetTexture = nullptr;         // WoodSlabTile::getTexture(int,int)
+    void* pStoneSlabGetResource = nullptr;       // StoneSlabTile::getResource(int,Random*,int)
+    void* pWoodSlabGetResource = nullptr;        // WoodSlabTile::getResource(int,Random*,int)
+    void* pStoneSlabGetDescriptionId = nullptr;  // StoneSlabTile::getDescriptionId(int)
+    void* pWoodSlabGetDescriptionId = nullptr;   // WoodSlabTile::getDescriptionId(int)
+    void* pStoneSlabGetAuxName = nullptr;        // StoneSlabTile::getAuxName(int)
+    void* pWoodSlabGetAuxName = nullptr;         // WoodSlabTile::getAuxName(int)
+    void* pStoneSlabRegisterIcons = nullptr;     // StoneSlabTile::registerIcons(IconRegister*)
+    void* pWoodSlabRegisterIcons = nullptr;      // WoodSlabTile::registerIcons(IconRegister*)
+    void* pStoneSlabItemGetIcon = nullptr;       // StoneSlabTileItem::getIcon(int)
+    void* pStoneSlabItemGetDescriptionId = nullptr; // StoneSlabTileItem::getDescriptionId(shared_ptr<ItemInstance>)
+    void* pHalfSlabCloneTileId = nullptr;        // HalfSlabTile::cloneTileId(Level*,int,int,int)
     void* pPlayerCanDestroy = nullptr;             // Player::canDestroy(Tile*)
     void* pServerPlayerGameModeUseItem = nullptr; // ServerPlayerGameMode::useItem(shared_ptr<Player>,Level*,shared_ptr<ItemInstance>,bool)
     void* pMultiPlayerGameModeUseItem = nullptr;  // MultiPlayerGameMode::useItem(shared_ptr<Player>,Level*,shared_ptr<ItemInstance>,bool)
@@ -64,6 +87,10 @@ public:
     void* pTextureAtlasLocationBlocks = nullptr; // TextureAtlas::LOCATION_BLOCKS
     void* pTextureAtlasLocationItems = nullptr;  // TextureAtlas::LOCATION_ITEMS
     void* pTileTiles = nullptr;                  // Tile::tiles (Tile*[]) for tile id lookup
+    void* pLevelHasNeighborSignal = nullptr;     // Level::hasNeighborSignal(int,int,int)
+    void* pLevelSetTileAndData = nullptr;        // Level::setTileAndData(int,int,int,int,int,int)
+    void* pLevelAddToTickNextTick = nullptr;     // Level::addToTickNextTick(int,int,int,int,int)
+    void* pServerLevelAddToTickNextTick = nullptr; // ServerLevel::addToTickNextTick(int,int,int,int,int)
 
 private:
     uintptr_t m_moduleBase = 0;

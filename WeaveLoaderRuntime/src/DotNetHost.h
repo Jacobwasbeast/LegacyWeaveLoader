@@ -17,5 +17,8 @@ namespace DotNetHost
     void CallShutdown();
     int  CallItemMineBlock(const void* args, int sizeBytes);
     int  CallItemUse(const void* args, int sizeBytes);
+    int  CallBlockOnPlace(const void* args, int sizeBytes);
+    int  CallBlockNeighborChanged(const void* args, int sizeBytes);
+    int  CallBlockTick(const void* args, int sizeBytes);
     void CallEntitySummoned(int entityNumericId, float x, float y, float z);
 }

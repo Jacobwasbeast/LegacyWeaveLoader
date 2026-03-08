@@ -12,15 +12,16 @@
     <OutputPath>..\build</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <NativeRuntimeBuildDir>$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime\build\$(Configuration)</NativeRuntimeBuildDir>
   </PropertyGroup>
 
   <!-- Build the C++ runtime DLL via CMake before the launcher -->
   <Target Name="BuildNativeRuntime" BeforeTargets="Build">
     <Message Importance="high" Text="[WeaveLoader] Configuring C++ runtime with CMake..." />
-    <Exec Command="cmake -B &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime\build&quot; -S &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime&quot; -A x64"
+    <Exec Command="cmake -B &quot;$(NativeRuntimeBuildDir)&quot; -S &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime&quot; -A x64"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime" />
     <Message Importance="high" Text="[WeaveLoader] Building C++ runtime..." />
-    <Exec Command="cmake --build &quot;$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime\build&quot; --config $(Configuration)"
+    <Exec Command="cmake --build &quot;$(NativeRuntimeBuildDir)&quot; --config $(Configuration)"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\WeaveLoaderRuntime" />
   </Target>
 

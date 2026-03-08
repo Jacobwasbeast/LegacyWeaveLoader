@@ -282,6 +282,98 @@ uint32_t FindSymbolRVA(const char* decoratedName)
     return 0;
 }
 
+uint32_t FindSymbolRVAByName(const char* exactName)
+{
+    if (!s_open || !exactName || !exactName[0]) return 0;
+
+    // 1) Search global symbol stream for exact name matches on data/thread symbols.
+    {
+        const PDB::ArrayView<PDB::HashRecord> records = s_globalStream->GetRecords();
+        for (const PDB::HashRecord& hashRecord : records)
+        {
+            const PDB::CodeView::DBI::Record* record = s_globalStream->GetRecord(*s_symbolRecords, hashRecord);
+            uint16_t section = 0;
+            uint32_t offset = 0;
+            const char* name = GetGlobalSymName(record, section, offset);
+
+            if (!name || strcmp(name, exactName) != 0)
+                continue;
+
+            uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(section, offset);
+            if (rva != 0) return rva;
+        }
+    }
+
+    // 2) Search per-module symbol streams for exact name matches.
+    {
+        const PDB::ArrayView<PDB::ModuleInfoStream::Module> modules = s_moduleStream->GetModules();
+        for (const PDB::ModuleInfoStream::Module& mod : modules)
+        {
+            if (!mod.HasSymbolStream())
+                continue;
+
+            const PDB::ModuleSymbolStream modSymStream = mod.CreateSymbolStream(*s_rawFile);
+            uint32_t foundRVA = 0;
+
+            modSymStream.ForEachSymbol([&](const PDB::CodeView::DBI::Record* record)
+            {
+                if (foundRVA != 0) return;
+
+                const char* name = nullptr;
+                uint16_t section = 0;
+                uint32_t offset = 0;
+
+                switch (record->header.kind)
+                {
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LPROC32:
+                    name = record->data.S_LPROC32.name;
+                    section = record->data.S_LPROC32.section;
+                    offset = record->data.S_LPROC32.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GPROC32:
+                    name = record->data.S_GPROC32.name;
+                    section = record->data.S_GPROC32.section;
+                    offset = record->data.S_GPROC32.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LPROC32_ID:
+                    name = record->data.S_LPROC32_ID.name;
+                    section = record->data.S_LPROC32_ID.section;
+                    offset = record->data.S_LPROC32_ID.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GPROC32_ID:
+                    name = record->data.S_GPROC32_ID.name;
+                    section = record->data.S_GPROC32_ID.section;
+                    offset = record->data.S_GPROC32_ID.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LDATA32:
+                    name = record->data.S_LDATA32.name;
+                    section = record->data.S_LDATA32.section;
+                    offset = record->data.S_LDATA32.offset;
+                    break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GDATA32:
+                    name = record->data.S_GDATA32.name;
+                    section = record->data.S_GDATA32.section;
+                    offset = record->data.S_GDATA32.offset;
+                    break;
+                default:
+                    return;
+                }
+
+                if (name && strcmp(name, exactName) == 0)
+                {
+                    uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(section, offset);
+                    if (rva != 0) foundRVA = rva;
+                }
+            });
+
+            if (foundRVA != 0)
+                return foundRVA;
+        }
+    }
+
+    return 0;
+}
+
 void DumpMatching(const char* substring)
 {
     if (!s_open) return;

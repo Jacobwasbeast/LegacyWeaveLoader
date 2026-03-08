@@ -8,11 +8,12 @@ namespace
 
 namespace CustomBlockRegistry
 {
-    void Register(int blockId, int requiredHarvestLevel, int requiredTool)
+    void Register(int blockId, int requiredHarvestLevel, int requiredTool, bool acceptsRedstonePower)
     {
         Definition def;
         def.requiredHarvestLevel = requiredHarvestLevel;
         def.requiredTool = static_cast<ToolType>(requiredTool);
+        def.acceptsRedstonePower = acceptsRedstonePower;
         g_definitions[blockId] = def;
     }
 

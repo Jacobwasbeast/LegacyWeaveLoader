@@ -17,6 +17,15 @@ public static class Registry
     {
         public static RegisteredBlock Register(Identifier id, BlockProperties properties)
             => BlockRegistry.Register(id, properties);
+
+        public static RegisteredBlock Register(Identifier id, WeaveLoader.API.Block.Block block, BlockProperties properties)
+            => BlockRegistry.Register(id, block, properties);
+
+        public static RegisteredBlock RegisterFalling(Identifier id, BlockProperties properties)
+            => BlockRegistry.Register(id, new FallingBlock(), properties);
+
+        public static RegisteredSlabBlock RegisterSlab(Identifier id, BlockProperties properties)
+            => (RegisteredSlabBlock)BlockRegistry.Register(id, new SlabBlock(), properties);
     }
 
     /// <summary>Item registration. Call Register() with a namespaced ID and ItemProperties.</summary>

@@ -90,6 +90,8 @@ add_library(WeaveLoaderRuntime SHARED
     src/CustomPickaxeRegistry.cpp
     src/CustomToolMaterialRegistry.cpp
     src/CustomBlockRegistry.cpp
+    src/CustomSlabRegistry.cpp
+    src/ManagedBlockRegistry.cpp
     src/CreativeInventory.cpp
     src/FurnaceRecipeRegistry.cpp
     src/MainMenuOverlay.cpp
@@ -120,6 +122,7 @@ endif()
 target_compile_definitions(WeaveLoaderRuntime PRIVATE
     WIN32_LEAN_AND_MEAN
     _CRT_SECURE_NO_WARNINGS
+    $<$<CONFIG:Debug>:WEAVELOADER_DEBUG_BUILD>
 )
 
 if(MSVC)

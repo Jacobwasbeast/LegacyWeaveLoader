@@ -25,6 +25,9 @@ static std::string GetDllDirectory(HMODULE hModule)
 DWORD WINAPI InitThread(LPVOID lpParam)
 {
     LogUtil::Log("[WeaveLoader] InitThread started (module=%p)", g_hModule);
+#ifdef WEAVELOADER_DEBUG_BUILD
+    LogUtil::Log("[WeaveLoader] Loader is running in debug mode");
+#endif
 
     std::string baseDir = GetDllDirectory(g_hModule);
     LogUtil::Log("[WeaveLoader] Runtime DLL directory: %s", baseDir.c_str());

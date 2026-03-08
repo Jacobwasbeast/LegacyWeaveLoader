@@ -14,8 +14,9 @@ namespace CustomBlockRegistry
     {
         int requiredHarvestLevel = -1;
         ToolType requiredTool = ToolType::None;
+        bool acceptsRedstonePower = false;
     };
 
-    void Register(int blockId, int requiredHarvestLevel, int requiredTool);
+    void Register(int blockId, int requiredHarvestLevel, int requiredTool, bool acceptsRedstonePower);
     const Definition* Find(int blockId);
 }

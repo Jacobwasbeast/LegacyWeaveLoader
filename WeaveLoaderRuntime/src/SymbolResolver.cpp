@@ -34,6 +34,29 @@ static const char* SYM_PICKAXEITEM_GETDESTROYSPEED = "?getDestroySpeed@PickaxeIt
 static const char* SYM_PICKAXEITEM_CANDESTROYSPECIAL = "?canDestroySpecial@PickaxeItem@@UEAA_NPEAVTile@@@Z";
 static const char* SYM_SHOVELITEM_GETDESTROYSPEED = "?getDestroySpeed@ShovelItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
 static const char* SYM_SHOVELITEM_CANDESTROYSPECIAL = "?canDestroySpecial@ShovelItem@@UEAA_NPEAVTile@@@Z";
+static const char* SYM_TILE_ONPLACE = "?onPlace@Tile@@UEAAXPEAVLevel@@HHH@Z";
+static const char* SYM_TILE_NEIGHBORCHANGED = "?neighborChanged@Tile@@UEAAXPEAVLevel@@HHHH@Z";
+static const char* SYM_TILE_TICK = "?tick@Tile@@UEAAXPEAVLevel@@HHHPEAVRandom@@@Z";
+static const char* SYM_LEVEL_UPDATE_NEIGHBORS_AT = "?updateNeighborsAt@Level@@QEAAXHHHH@Z";
+static const char* SYM_SERVERLEVEL_TICKPENDINGTICKS = "?tickPendingTicks@ServerLevel@@UEAA_N_N@Z";
+static const char* SYM_LEVEL_GETTILE = "?getTile@Level@@UEAAHHHH@Z";
+static const char* SYM_LEVEL_SETDATA = "?setData@Level@@UEAA_NHHHHH_N@Z";
+static const char* SYM_TILE_GETRESOURCE = "?getResource@Tile@@UEAAHHPEAVRandom@@H@Z";
+static const char* SYM_TILE_CLONETILEID = "?cloneTileId@Tile@@UEAAHPEAVLevel@@HHH@Z";
+static const char* SYM_TILE_GETTEXTURE_FACEDATA = "?getTexture@Tile@@UEAAPEAVIcon@@HH@Z";
+static const char* SYM_STONESLAB_GETTEXTURE = "?getTexture@StoneSlabTile@@UEAAPEAVIcon@@HH@Z";
+static const char* SYM_WOODSLAB_GETTEXTURE = "?getTexture@WoodSlabTile@@UEAAPEAVIcon@@HH@Z";
+static const char* SYM_STONESLAB_GETRESOURCE = "?getResource@StoneSlabTile@@UEAAHHPEAVRandom@@H@Z";
+static const char* SYM_WOODSLAB_GETRESOURCE = "?getResource@WoodSlabTile@@UEAAHHPEAVRandom@@H@Z";
+static const char* SYM_STONESLAB_GETDESCRIPTIONID = "?getDescriptionId@StoneSlabTile@@UEAAIH@Z";
+static const char* SYM_WOODSLAB_GETDESCRIPTIONID = "?getDescriptionId@WoodSlabTile@@UEAAIH@Z";
+static const char* SYM_STONESLAB_GETAUXNAME = "?getAuxName@StoneSlabTile@@UEAAHH@Z";
+static const char* SYM_WOODSLAB_GETAUXNAME = "?getAuxName@WoodSlabTile@@UEAAHH@Z";
+static const char* SYM_STONESLAB_REGISTERICONS = "?registerIcons@StoneSlabTile@@UEAAXPEAVIconRegister@@@Z";
+static const char* SYM_WOODSLAB_REGISTERICONS = "?registerIcons@WoodSlabTile@@UEAAXPEAVIconRegister@@@Z";
+static const char* SYM_STONESLABITEM_GETICON = "?getIcon@StoneSlabTileItem@@UEAAPEAVIcon@@H@Z";
+static const char* SYM_STONESLABITEM_GETDESCRIPTIONID = "?getDescriptionId@StoneSlabTileItem@@UEAAIV?$shared_ptr@VItemInstance@@@std@@@Z";
+static const char* SYM_HALFSLAB_CLONETILEID = "?cloneTileId@HalfSlabTile@@UEAAHPEAVLevel@@HHH@Z";
 static const char* SYM_PLAYER_CANDESTROY = "?canDestroy@Player@@QEAA_NPEAVTile@@@Z";
 static const char* SYM_SERVER_PLAYER_GAMEMODE_USEITEM = "?useItem@ServerPlayerGameMode@@QEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
 static const char* SYM_MULTI_PLAYER_GAMEMODE_USEITEM = "?useItem@MultiPlayerGameMode@@UEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
@@ -61,6 +84,23 @@ static const char* SYM_ABSTRACTCONTAINERMENU_BROADCASTCHANGES = "?broadcastChang
 static const char* SYM_TEXATLAS_BLOCKS = "?LOCATION_BLOCKS@TextureAtlas@@2VResourceLocation@@A";
 static const char* SYM_TEXATLAS_ITEMS = "?LOCATION_ITEMS@TextureAtlas@@2VResourceLocation@@A";
 static const char* SYM_TILE_TILES = "?tiles@Tile@@2PEAPEAV1@EA";
+static const char* SYM_LEVEL_HASNEIGHBORSIGNAL = "?hasNeighborSignal@Level@@QEAA_NHHH@Z";
+static const char* SYM_LEVEL_SETTILEANDDATA = "?setTileAndData@Level@@UEAA_NHHHHHH@Z";
+static const char* SYM_LEVEL_ADDTOTICKNEXTTICK = "?addToTickNextTick@Level@@UEAAXHHHHH@Z";
+static const char* SYM_SERVERLEVEL_ADDTOTICKNEXTTICK = "?addToTickNextTick@ServerLevel@@UEAAXHHHHH@Z";
+
+static void* ResolveExactProcName(uintptr_t moduleBase, const char* exactName)
+{
+    uint32_t rva = PdbParser::FindSymbolRVAByName(exactName);
+    if (rva == 0)
+        return nullptr;
+    return reinterpret_cast<void*>(moduleBase + rva);
+}
+
+static bool IsStub31000(uintptr_t moduleBase, void* ptr)
+{
+    return ptr == reinterpret_cast<void*>(moduleBase + 0x31000u);
+}
 
 bool SymbolResolver::Initialize()
 {
@@ -147,6 +187,29 @@ bool SymbolResolver::ResolveGameFunctions()
     pPickaxeItemCanDestroySpecial = Resolve(SYM_PICKAXEITEM_CANDESTROYSPECIAL);
     pShovelItemGetDestroySpeed = Resolve(SYM_SHOVELITEM_GETDESTROYSPEED);
     pShovelItemCanDestroySpecial = Resolve(SYM_SHOVELITEM_CANDESTROYSPECIAL);
+    pTileOnPlace = Resolve(SYM_TILE_ONPLACE);
+    pTileNeighborChanged = Resolve(SYM_TILE_NEIGHBORCHANGED);
+    pTileTick = Resolve(SYM_TILE_TICK);
+    pLevelUpdateNeighborsAt = Resolve(SYM_LEVEL_UPDATE_NEIGHBORS_AT);
+    pServerLevelTickPendingTicks = Resolve(SYM_SERVERLEVEL_TICKPENDINGTICKS);
+    pLevelGetTile = Resolve(SYM_LEVEL_GETTILE);
+    pLevelSetData = Resolve(SYM_LEVEL_SETDATA);
+    pTileGetResource = Resolve(SYM_TILE_GETRESOURCE);
+    pTileCloneTileId = Resolve(SYM_TILE_CLONETILEID);
+    pTileGetTextureFaceData = Resolve(SYM_TILE_GETTEXTURE_FACEDATA);
+    pStoneSlabGetTexture = Resolve(SYM_STONESLAB_GETTEXTURE);
+    pWoodSlabGetTexture = Resolve(SYM_WOODSLAB_GETTEXTURE);
+    pStoneSlabGetResource = Resolve(SYM_STONESLAB_GETRESOURCE);
+    pWoodSlabGetResource = Resolve(SYM_WOODSLAB_GETRESOURCE);
+    pStoneSlabGetDescriptionId = Resolve(SYM_STONESLAB_GETDESCRIPTIONID);
+    pWoodSlabGetDescriptionId = Resolve(SYM_WOODSLAB_GETDESCRIPTIONID);
+    pStoneSlabGetAuxName = Resolve(SYM_STONESLAB_GETAUXNAME);
+    pWoodSlabGetAuxName = Resolve(SYM_WOODSLAB_GETAUXNAME);
+    pStoneSlabRegisterIcons = Resolve(SYM_STONESLAB_REGISTERICONS);
+    pWoodSlabRegisterIcons = Resolve(SYM_WOODSLAB_REGISTERICONS);
+    pStoneSlabItemGetIcon = Resolve(SYM_STONESLABITEM_GETICON);
+    pStoneSlabItemGetDescriptionId = Resolve(SYM_STONESLABITEM_GETDESCRIPTIONID);
+    pHalfSlabCloneTileId = Resolve(SYM_HALFSLAB_CLONETILEID);
     pPlayerCanDestroy = Resolve(SYM_PLAYER_CANDESTROY);
     pServerPlayerGameModeUseItem = Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEM);
     pMultiPlayerGameModeUseItem = Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEM);
@@ -176,6 +239,24 @@ bool SymbolResolver::ResolveGameFunctions()
     pTextureAtlasLocationBlocks = Resolve(SYM_TEXATLAS_BLOCKS);
     pTextureAtlasLocationItems = Resolve(SYM_TEXATLAS_ITEMS);
     pTileTiles = Resolve(SYM_TILE_TILES);
+    pLevelHasNeighborSignal = Resolve(SYM_LEVEL_HASNEIGHBORSIGNAL);
+    pLevelSetTileAndData = Resolve(SYM_LEVEL_SETTILEANDDATA);
+    pLevelAddToTickNextTick = Resolve(SYM_LEVEL_ADDTOTICKNEXTTICK);
+    pServerLevelAddToTickNextTick = Resolve(SYM_SERVERLEVEL_ADDTOTICKNEXTTICK);
+
+    // Some public symbols in this build resolve to stub bodies. Prefer exact
+    // module procedure names from the PDB where those exist.
+    if (pShovelItemGetDestroySpeed == nullptr)
+        pShovelItemGetDestroySpeed = ResolveExactProcName(m_moduleBase, "DiggerItem::getDestroySpeed");
+    if (IsStub31000(m_moduleBase, pTileOnPlace))
+        pTileOnPlace = ResolveExactProcName(m_moduleBase, "Tile::onPlace");
+    if (IsStub31000(m_moduleBase, pTileNeighborChanged))
+        pTileNeighborChanged = ResolveExactProcName(m_moduleBase, "Tile::neighborChanged");
+    if (IsStub31000(m_moduleBase, pTileTick))
+        pTileTick = ResolveExactProcName(m_moduleBase, "Tile::tick");
+    if (IsStub31000(m_moduleBase, pWoodSlabRegisterIcons))
+        pWoodSlabRegisterIcons = ResolveExactProcName(m_moduleBase, "WoodSlabTile::registerIcons");
+
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140d.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandle(nullptr), SYM_OPERATOR_NEW);
@@ -218,6 +299,29 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("PickaxeItem::canDestroySpecial", pPickaxeItemCanDestroySpecial);
     logSym("ShovelItem::getDestroySpeed", pShovelItemGetDestroySpeed);
     logSym("ShovelItem::canDestroySpecial", pShovelItemCanDestroySpecial);
+    logSym("Tile::onPlace", pTileOnPlace);
+    logSym("Tile::neighborChanged", pTileNeighborChanged);
+    logSym("Tile::tick", pTileTick);
+    logSym("Level::updateNeighborsAt", pLevelUpdateNeighborsAt);
+    logSym("ServerLevel::tickPendingTicks", pServerLevelTickPendingTicks);
+    logSym("Level::getTile", pLevelGetTile);
+    logSym("Level::setData", pLevelSetData);
+    logSym("Tile::getResource", pTileGetResource);
+    logSym("Tile::cloneTileId", pTileCloneTileId);
+    logSym("Tile::getTexture(face,data)", pTileGetTextureFaceData);
+    logSym("StoneSlabTile::getTexture", pStoneSlabGetTexture);
+    logSym("WoodSlabTile::getTexture", pWoodSlabGetTexture);
+    logSym("StoneSlabTile::getResource", pStoneSlabGetResource);
+    logSym("WoodSlabTile::getResource", pWoodSlabGetResource);
+    logSym("StoneSlabTile::getDescriptionId", pStoneSlabGetDescriptionId);
+    logSym("WoodSlabTile::getDescriptionId", pWoodSlabGetDescriptionId);
+    logSym("StoneSlabTile::getAuxName", pStoneSlabGetAuxName);
+    logSym("WoodSlabTile::getAuxName", pWoodSlabGetAuxName);
+    logSym("StoneSlabTile::registerIcons", pStoneSlabRegisterIcons);
+    logSym("WoodSlabTile::registerIcons", pWoodSlabRegisterIcons);
+    logSym("StoneSlabTileItem::getIcon", pStoneSlabItemGetIcon);
+    logSym("StoneSlabTileItem::getDescriptionId", pStoneSlabItemGetDescriptionId);
+    logSym("HalfSlabTile::cloneTileId", pHalfSlabCloneTileId);
     logSym("Player::canDestroy", pPlayerCanDestroy);
     logSym("ServerPlayerGameMode::useItem", pServerPlayerGameModeUseItem);
     logSym("MultiPlayerGameMode::useItem", pMultiPlayerGameModeUseItem);
@@ -243,6 +347,10 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("TextureAtlas::LOCATION_BLOCKS", pTextureAtlasLocationBlocks);
     logSym("TextureAtlas::LOCATION_ITEMS", pTextureAtlasLocationItems);
     logSym("Tile::tiles", pTileTiles);
+    logSym("Level::hasNeighborSignal", pLevelHasNeighborSignal);
+    logSym("Level::setTileAndData", pLevelSetTileAndData);
+    logSym("Level::addToTickNextTick", pLevelAddToTickNextTick);
+    logSym("ServerLevel::addToTickNextTick", pServerLevelAddToTickNextTick);
 
     bool ok = pRunStaticCtors && pMinecraftTick && pMinecraftInit;
     if (ok)

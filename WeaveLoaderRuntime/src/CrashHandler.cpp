@@ -372,14 +372,16 @@ static LONG WINAPI VectoredHandler(EXCEPTION_POINTERS* ep)
         return EXCEPTION_CONTINUE_SEARCH;
 
     // TODO: Remove this suppression once the animated texture pack fault is fixed
-    // at the source. For now, a vectored handler sees first-chance exceptions
-    // before local __try/__except blocks run, and logging those handled faults
-    // as crashes causes severe log spam and stalls under Windows.
-    //
-    // Keep vectored reporting only for fail-fast/noncontinuable cases that will
-    // not normally make it to the top-level unhandled filter.
+    // at the source. For release builds, keep vectored reporting only for
+    // fail-fast/noncontinuable cases so handled first-chance faults do not spam
+    // logs and stall the process. In debug builds, log all fatal exceptions to
+    // make crash investigation easier.
+#ifdef _DEBUG
+    WriteCrashReport("VectoredExceptionHandler", ep->ExceptionRecord, ep->ContextRecord);
+#else
     if (ShouldWriteVectoredReport(ep->ExceptionRecord))
         WriteCrashReport("VectoredExceptionHandler", ep->ExceptionRecord, ep->ContextRecord);
+#endif
 
     return EXCEPTION_CONTINUE_SEARCH;
 }

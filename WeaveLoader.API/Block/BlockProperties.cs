@@ -65,6 +65,7 @@ public class BlockProperties
     internal string? NameValue;
     internal int RequiredHarvestLevelValue = -1;
     internal ToolType RequiredToolValue = ToolType.None;
+    internal bool AcceptsRedstonePowerValue;
 
     public BlockProperties Material(MaterialType material) { MaterialValue = material; return this; }
     public BlockProperties Hardness(float hardness) { HardnessValue = hardness; return this; }
@@ -82,4 +83,6 @@ public class BlockProperties
     public BlockProperties RequiredHarvestLevel(int level) { RequiredHarvestLevelValue = level; return this; }
     /// <summary>Tool type required to harvest this block (e.g. Pickaxe for stone-like blocks).</summary>
     public BlockProperties RequiredTool(ToolType tool) { RequiredToolValue = tool; return this; }
+    /// <summary>Marks the block as one that can receive redstone power. Stored for future block callbacks.</summary>
+    public BlockProperties AcceptsRedstonePower(bool accepts = true) { AcceptsRedstonePowerValue = accepts; return this; }
 }

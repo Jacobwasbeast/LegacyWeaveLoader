@@ -1,4 +1,5 @@
 #include "GameObjectFactory.h"
+#include "CustomSlabRegistry.h"
 #include "SymbolResolver.h"
 #include "PdbParser.h"
 #include "LogUtil.h"
@@ -17,9 +18,12 @@ typedef void* (__fastcall *TileSetSoundType_fn)(void* thisPtr, const void* sound
 typedef void* (__fastcall *TileSetIconName_fn)(void* thisPtr, const std::wstring& name);
 // Tile* Tile::setDescriptionId(unsigned int) — public virtual
 typedef void* (__fastcall *TileSetDescriptionId_fn)(void* thisPtr, unsigned int id);
+typedef void* (__fastcall *TileSetLightBlock_fn)(void* thisPtr, int value);
+typedef void* (__fastcall *TileSetLightEmission_fn)(void* thisPtr, float value);
 
 // TileItem::TileItem(int id)
 typedef void (__fastcall *TileItemCtor_fn)(void* thisPtr, int id);
+typedef void (__fastcall *HeavyTileCtor_fn)(void* thisPtr, int id, bool isSolidRender);
 
 // Item::Item(int id) — protected ctor
 typedef void (__fastcall *ItemCtor_fn)(void* thisPtr, int id);
@@ -29,8 +33,12 @@ typedef void (__fastcall *ShovelCtor_fn)(void* thisPtr, int id, const void* tier
 typedef void (__fastcall *HoeCtor_fn)(void* thisPtr, int id, const void* tier);
 typedef void (__fastcall *HatchetCtor_fn)(void* thisPtr, int id, const void* tier);
 typedef void (__fastcall *WeaponCtor_fn)(void* thisPtr, int id, const void* tier);
+typedef void (__fastcall *StoneSlabCtor_fn)(void* thisPtr, int id, bool fullSize);
+typedef void (__fastcall *WoodSlabCtor_fn)(void* thisPtr, int id, bool fullSize);
+typedef void (__fastcall *StoneSlabItemCtor_fn)(void* thisPtr, int id, void* halfTile, void* fullTile, bool full);
 // Item* Item::setIconName(const std::wstring&)
 typedef void* (__fastcall *ItemSetIconName_fn)(void* thisPtr, const std::wstring& name);
+typedef void* (__fastcall *ItemSetUseDescriptionId_fn)(void* thisPtr, unsigned int id);
 // Item::getDescriptionId(int) — used to extract the descriptionId field offset
 typedef unsigned int (__fastcall *ItemGetDescriptionId_fn)(void* thisPtr, int auxData);
 
@@ -40,8 +48,11 @@ static TileSetFloat_fn    fnSetExplodeable = nullptr;
 static TileSetSoundType_fn fnSetSoundType  = nullptr;
 static TileSetIconName_fn fnTileSetIconName= nullptr;
 static TileSetDescriptionId_fn fnTileSetDescriptionId = nullptr;
+static TileSetLightBlock_fn fnTileSetLightBlock = nullptr;
+static TileSetLightEmission_fn fnTileSetLightEmission = nullptr;
 
 static TileItemCtor_fn    fnTileItemCtor   = nullptr;
+static HeavyTileCtor_fn   fnHeavyTileCtor  = nullptr;
 
 static ItemCtor_fn        fnItemCtor       = nullptr;
 static PickaxeCtor_fn     fnPickaxeCtor    = nullptr;
@@ -49,7 +60,11 @@ static ShovelCtor_fn      fnShovelCtor     = nullptr;
 static HoeCtor_fn         fnHoeCtor        = nullptr;
 static HatchetCtor_fn     fnHatchetCtor    = nullptr;
 static WeaponCtor_fn      fnWeaponCtor     = nullptr;
+static StoneSlabCtor_fn   fnStoneSlabCtor  = nullptr;
+static WoodSlabCtor_fn    fnWoodSlabCtor   = nullptr;
+static StoneSlabItemCtor_fn fnStoneSlabItemCtor = nullptr;
 static ItemSetIconName_fn fnItemSetIconName= nullptr;
+static ItemSetUseDescriptionId_fn fnItemSetUseDescriptionId = nullptr;
 static int s_itemDescIdOffset = -1; // offset of descriptionId field in Item, extracted from getDescriptionId
 
 // Store ADDRESSES of Material*/SoundType* statics so we can dereference lazily
@@ -61,6 +76,9 @@ static void** s_tierAddrs[5] = {};
 static const int TILE_ALLOC_SIZE = 1024;
 static const int ITEM_ALLOC_SIZE = 1024;
 static const int TILEITEM_ALLOC_SIZE = 1024;
+static const int STONE_SLAB_TILE_ALLOC_SIZE = 128;
+static const int WOOD_SLAB_TILE_ALLOC_SIZE = 120;
+static const int STONE_SLAB_TILE_ITEM_ALLOC_SIZE = 192;
 
 static bool s_resolved = false;
 static std::unordered_map<int, void*> s_createdItems;
@@ -117,9 +135,14 @@ bool ResolveSymbols(SymbolResolver& resolver)
         "?setIconName@Tile@@MEAAPEAV1@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
     fnTileSetDescriptionId = (TileSetDescriptionId_fn)resolver.Resolve(
         "?setDescriptionId@Tile@@UEAAPEAV1@I@Z");
+    fnTileSetLightBlock = (TileSetLightBlock_fn)resolver.Resolve(
+        "?setLightBlock@Tile@@MEAAPEAV1@H@Z");
+    fnTileSetLightEmission = (TileSetLightEmission_fn)resolver.Resolve(
+        "?setLightEmission@Tile@@MEAAPEAV1@M@Z");
 
     // TileItem constructor
     fnTileItemCtor = (TileItemCtor_fn)resolver.Resolve("??0TileItem@@QEAA@H@Z");
+    fnHeavyTileCtor = (HeavyTileCtor_fn)resolver.Resolve("??0HeavyTile@@QEAA@H_N@Z");
 
     // Item constructor — protected (IEAA not QEAA)
     fnItemCtor = (ItemCtor_fn)resolver.Resolve("??0Item@@IEAA@H@Z");
@@ -128,10 +151,15 @@ bool ResolveSymbols(SymbolResolver& resolver)
     fnHoeCtor = (HoeCtor_fn)resolver.Resolve("??0HoeItem@@QEAA@HPEBVTier@Item@@@Z");
     fnHatchetCtor = (HatchetCtor_fn)resolver.Resolve("??0HatchetItem@@QEAA@HPEBVTier@Item@@@Z");
     fnWeaponCtor = (WeaponCtor_fn)resolver.Resolve("??0WeaponItem@@QEAA@HPEBVTier@Item@@@Z");
+    fnStoneSlabCtor = (StoneSlabCtor_fn)resolver.Resolve("??0StoneSlabTile@@QEAA@H_N@Z");
+    fnWoodSlabCtor = (WoodSlabCtor_fn)resolver.Resolve("??0WoodSlabTile@@QEAA@H_N@Z");
+    fnStoneSlabItemCtor = (StoneSlabItemCtor_fn)resolver.Resolve("??0StoneSlabTileItem@@QEAA@HPEAVHalfSlabTile@@0_N@Z");
 
     // Item::setIconName
     fnItemSetIconName = (ItemSetIconName_fn)resolver.Resolve(
         "?setIconName@Item@@QEAAPEAV1@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
+    fnItemSetUseDescriptionId = (ItemSetUseDescriptionId_fn)resolver.Resolve(
+        "?setUseDescriptionId@Item@@QEAAPEAV1@I@Z");
     // Item::setDescriptionId is inlined — extract the field offset from getDescriptionId instead.
     // getDescriptionId(int) is "mov eax, [rcx+offset]; ret" so we parse the offset from its opcodes.
     void* fnItemGetDescId = resolver.Resolve("?getDescriptionId@Item@@UEAAIH@Z");
@@ -214,14 +242,21 @@ bool ResolveSymbols(SymbolResolver& resolver)
     logSym("setExplodeable",     (void*)fnSetExplodeable);
     logSym("setSoundType",       (void*)fnSetSoundType);
     logSym("Tile::setIconName",  (void*)fnTileSetIconName);
+    logSym("Tile::setLightBlock", (void*)fnTileSetLightBlock);
+    logSym("Tile::setLightEmission", (void*)fnTileSetLightEmission);
     logSym("TileItem::TileItem", (void*)fnTileItemCtor);
+    logSym("HeavyTile::HeavyTile", (void*)fnHeavyTileCtor);
     logSym("Item::Item",         (void*)fnItemCtor);
     logSym("PickaxeItem::PickaxeItem", (void*)fnPickaxeCtor);
     logSym("ShovelItem::ShovelItem", (void*)fnShovelCtor);
     logSym("HoeItem::HoeItem", (void*)fnHoeCtor);
     logSym("HatchetItem::HatchetItem", (void*)fnHatchetCtor);
     logSym("WeaponItem::WeaponItem", (void*)fnWeaponCtor);
+    logSym("StoneSlabTile::StoneSlabTile", (void*)fnStoneSlabCtor);
+    logSym("WoodSlabTile::WoodSlabTile", (void*)fnWoodSlabCtor);
+    logSym("StoneSlabTileItem::StoneSlabTileItem", (void*)fnStoneSlabItemCtor);
     logSym("Item::setIconName",  (void*)fnItemSetIconName);
+    logSym("Item::setUseDescriptionId", (void*)fnItemSetUseDescriptionId);
     logSym("Material::stone addr", (void*)s_materialAddrs[1]);
     logSym("SOUND_STONE addr",     (void*)s_soundAddrs[1]);
 
@@ -247,8 +282,44 @@ bool ResolveSymbols(SymbolResolver& resolver)
     return s_resolved;
 }
 
+static void ApplyTileCommon(
+    void* tile,
+    float hardness,
+    float resistance,
+    int soundType,
+    const wchar_t* iconName,
+    float lightEmission,
+    int lightBlock,
+    int descriptionId)
+{
+    if (fnSetDestroyTime)
+        fnSetDestroyTime(tile, hardness);
+
+    if (fnSetExplodeable)
+        fnSetExplodeable(tile, resistance);
+
+    void* sound = GetSound(soundType);
+    if (fnSetSoundType && sound)
+        fnSetSoundType(tile, sound);
+
+    if (fnTileSetLightEmission)
+        fnTileSetLightEmission(tile, lightEmission);
+
+    if (fnTileSetLightBlock)
+        fnTileSetLightBlock(tile, lightBlock);
+
+    if (fnTileSetIconName && iconName)
+    {
+        std::wstring name(iconName);
+        fnTileSetIconName(tile, name);
+    }
+
+    if (fnTileSetDescriptionId && descriptionId >= 0)
+        fnTileSetDescriptionId(tile, static_cast<unsigned int>(descriptionId));
+}
+
 bool CreateTile(int tileId, int materialType, float hardness, float resistance,
-                int soundType, const wchar_t* iconName, int descriptionId)
+                int soundType, const wchar_t* iconName, float lightEmission, int lightBlock, int descriptionId)
 {
     if (!s_resolved || !fnTileCtor)
     {
@@ -270,27 +341,7 @@ bool CreateTile(int tileId, int materialType, float hardness, float resistance,
     void* tile = ::operator new(TILE_ALLOC_SIZE);
     memset(tile, 0, TILE_ALLOC_SIZE);
     fnTileCtor(tile, tileId, mat, true);
-
-    if (fnSetDestroyTime)
-        fnSetDestroyTime(tile, hardness);
-
-    if (fnSetExplodeable)
-        fnSetExplodeable(tile, resistance);
-
-    void* sound = GetSound(soundType);
-    if (fnSetSoundType && sound)
-        fnSetSoundType(tile, sound);
-
-    if (fnTileSetIconName && iconName)
-    {
-        std::wstring name(iconName);
-        fnTileSetIconName(tile, name);
-    }
-
-    if (fnTileSetDescriptionId && descriptionId >= 0)
-    {
-        fnTileSetDescriptionId(tile, static_cast<unsigned int>(descriptionId));
-    }
+    ApplyTileCommon(tile, hardness, resistance, soundType, iconName, lightEmission, lightBlock, descriptionId);
 
     LogUtil::Log("[WeaveLoader] Created Tile id=%d (material=%d, icon=%ls, descId=%d)", tileId, materialType,
                  iconName ? iconName : L"<none>", descriptionId);
@@ -305,6 +356,102 @@ bool CreateTile(int tileId, int materialType, float hardness, float resistance,
         LogUtil::Log("[WeaveLoader] Created TileItem for tile %d", tileId);
     }
 
+    return true;
+}
+
+bool CreateManagedTile(int tileId, int materialType, float hardness, float resistance,
+                       int soundType, const wchar_t* iconName, float lightEmission, int lightBlock, int descriptionId)
+{
+    return CreateTile(tileId, materialType, hardness, resistance, soundType, iconName, lightEmission, lightBlock, descriptionId);
+}
+
+bool CreateFallingTile(int tileId, int materialType, float hardness, float resistance,
+                       int soundType, const wchar_t* iconName, float lightEmission, int lightBlock, int descriptionId)
+{
+    if (!s_resolved || !fnHeavyTileCtor)
+    {
+        LogUtil::Log("[WeaveLoader] CreateFallingTile: symbols not resolved");
+        return false;
+    }
+
+    void* tile = ::operator new(TILE_ALLOC_SIZE);
+    memset(tile, 0, TILE_ALLOC_SIZE);
+    fnHeavyTileCtor(tile, tileId, true);
+    ApplyTileCommon(tile, hardness, resistance, soundType, iconName, lightEmission, lightBlock, descriptionId);
+
+    if (fnTileItemCtor)
+    {
+        void* tileItem = ::operator new(TILEITEM_ALLOC_SIZE);
+        memset(tileItem, 0, TILEITEM_ALLOC_SIZE);
+        fnTileItemCtor(tileItem, tileId - 256);
+    }
+
+    LogUtil::Log("[WeaveLoader] Created FallingTile id=%d (icon=%ls, descId=%d)",
+        tileId, iconName ? iconName : L"<none>", descriptionId);
+    return true;
+}
+
+bool CreateSlabPair(int halfTileId, int fullTileId, int materialType, float hardness, float resistance,
+                    int soundType, const wchar_t* iconName, float lightEmission, int lightBlock, int descriptionId)
+{
+    if (!s_resolved || !fnStoneSlabItemCtor || (!fnStoneSlabCtor && !fnWoodSlabCtor))
+    {
+        LogUtil::Log("[WeaveLoader] CreateSlabPair: symbols not resolved");
+        return false;
+    }
+
+    const bool woodFamily = (materialType == 2);
+    if ((woodFamily && !fnWoodSlabCtor) || (!woodFamily && !fnStoneSlabCtor))
+    {
+        LogUtil::Log("[WeaveLoader] CreateSlabPair: missing %s slab ctor", woodFamily ? "wood" : "stone");
+        return false;
+    }
+    const int tileAllocSize = woodFamily ? WOOD_SLAB_TILE_ALLOC_SIZE : STONE_SLAB_TILE_ALLOC_SIZE;
+
+    void* halfTile = ::operator new(tileAllocSize);
+    void* fullTile = ::operator new(tileAllocSize);
+    memset(halfTile, 0, tileAllocSize);
+    memset(fullTile, 0, tileAllocSize);
+
+    if (woodFamily)
+    {
+        fnWoodSlabCtor(halfTile, halfTileId, false);
+        fnWoodSlabCtor(fullTile, fullTileId, true);
+    }
+    else
+    {
+        fnStoneSlabCtor(halfTile, halfTileId, false);
+        fnStoneSlabCtor(fullTile, fullTileId, true);
+    }
+
+    ApplyTileCommon(halfTile, hardness, resistance, soundType, iconName, lightEmission, lightBlock, descriptionId);
+    ApplyTileCommon(fullTile, hardness, resistance, soundType, iconName, lightEmission, lightBlock, descriptionId);
+
+    void* slabItem = ::operator new(STONE_SLAB_TILE_ITEM_ALLOC_SIZE);
+    memset(slabItem, 0, STONE_SLAB_TILE_ITEM_ALLOC_SIZE);
+    fnStoneSlabItemCtor(slabItem, halfTileId - 256, halfTile, fullTile, false);
+
+    if (fnItemSetIconName)
+    {
+        std::wstring name = (iconName && iconName[0]) ? iconName : L"MISSING_ICON_ITEM";
+        fnItemSetIconName(slabItem, name);
+    }
+
+    if (s_itemDescIdOffset > 0 && descriptionId >= 0)
+    {
+        *reinterpret_cast<unsigned int*>(static_cast<char*>(slabItem) + s_itemDescIdOffset) =
+            static_cast<unsigned int>(descriptionId);
+    }
+
+    if (fnItemSetUseDescriptionId && descriptionId >= 0)
+    {
+        fnItemSetUseDescriptionId(slabItem, static_cast<unsigned int>(descriptionId));
+    }
+
+    CustomSlabRegistry::Register(halfTileId, fullTileId, descriptionId, woodFamily, iconName);
+
+    LogUtil::Log("[WeaveLoader] Created SlabPair half=%d full=%d family=%s (icon=%ls, descId=%d)",
+        halfTileId, fullTileId, woodFamily ? "wood" : "stone", iconName ? iconName : L"<none>", descriptionId);
     return true;
 }
 

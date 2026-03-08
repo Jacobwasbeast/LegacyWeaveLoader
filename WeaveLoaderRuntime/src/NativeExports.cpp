@@ -7,11 +7,34 @@
 #include "CustomPickaxeRegistry.h"
 #include "CustomToolMaterialRegistry.h"
 #include "CustomBlockRegistry.h"
+#include "CustomSlabRegistry.h"
+#include "ManagedBlockRegistry.h"
 #include "ModStrings.h"
 #include "LogUtil.h"
 #include <Windows.h>
 #include <cstring>
 #include <string>
+
+namespace
+{
+    using LevelHasNeighborSignal_fn = bool (__fastcall *)(void* thisPtr, int x, int y, int z);
+    using LevelSetTileAndData_fn = bool (__fastcall *)(void* thisPtr, int x, int y, int z, int blockId, int data, int flags);
+    using LevelAddToTickNextTick_fn = void (__fastcall *)(void* thisPtr, int x, int y, int z, int blockId, int delay);
+    using LevelGetTile_fn = int (__fastcall *)(void* thisPtr, int x, int y, int z);
+
+    LevelHasNeighborSignal_fn s_levelHasNeighborSignal = nullptr;
+    LevelSetTileAndData_fn s_levelSetTileAndData = nullptr;
+    LevelAddToTickNextTick_fn s_levelAddToTickNextTick = nullptr;
+    LevelGetTile_fn s_levelGetTile = nullptr;
+}
+
+void NativeExports::SetLevelInteropSymbols(void* hasNeighborSignal, void* setTileAndData, void* addToTickNextTick, void* getTile)
+{
+    s_levelHasNeighborSignal = reinterpret_cast<LevelHasNeighborSignal_fn>(hasNeighborSignal);
+    s_levelSetTileAndData = reinterpret_cast<LevelSetTileAndData_fn>(setTileAndData);
+    s_levelAddToTickNextTick = reinterpret_cast<LevelAddToTickNextTick_fn>(addToTickNextTick);
+    s_levelGetTile = reinterpret_cast<LevelGetTile_fn>(getTile);
+}
 
 static std::wstring Utf8ToWide(const char* utf8)
 {
@@ -36,6 +59,36 @@ static int ResolveRecipeId(const char* namespacedId, bool preferItem)
     return (blockId >= 0) ? blockId : itemId;
 }
 
+static bool PrepareBlockRegistration(
+    const char* namespacedId,
+    const char* iconName,
+    const char* displayName,
+    int* outId,
+    int* outDescId,
+    std::wstring* outIcon)
+{
+    if (!namespacedId || !outId || !outDescId || !outIcon)
+        return false;
+
+    *outId = IdRegistry::Instance().Register(IdRegistry::Type::Block, namespacedId);
+    if (*outId < 0)
+    {
+        LogUtil::Log("[WeaveLoader] Failed to allocate block ID for '%s'", namespacedId);
+        return false;
+    }
+
+    *outIcon = Utf8ToWide(iconName);
+    *outDescId = -1;
+    if (displayName && displayName[0])
+    {
+        *outDescId = ModStrings::AllocateId();
+        std::wstring wName = Utf8ToWide(displayName);
+        ModStrings::Register(*outDescId, wName.c_str());
+    }
+
+    return true;
+}
+
 extern "C"
 {
 
@@ -50,42 +103,160 @@ int native_register_block(
     int lightBlock,
     const char* displayName,
     int requiredHarvestLevel,
-    int requiredTool)
+    int requiredTool,
+    int acceptsRedstonePower)
 {
     if (!namespacedId) return -1;
 
-    int id = IdRegistry::Instance().Register(IdRegistry::Type::Block, namespacedId);
-    if (id < 0)
-    {
-        LogUtil::Log("[WeaveLoader] Failed to allocate block ID for '%s'", namespacedId);
+    int id = -1;
+    int descId = -1;
+    std::wstring wIcon;
+    if (!PrepareBlockRegistration(namespacedId, iconName, displayName, &id, &descId, &wIcon))
         return -1;
-    }
 
     LogUtil::Log("[WeaveLoader] Registered block '%s' -> ID %d (hardness=%.1f, resistance=%.1f)",
                  namespacedId, id, hardness, resistance);
 
-    std::wstring wIcon = Utf8ToWide(iconName);
-
-    int descId = -1;
-    if (displayName && displayName[0])
-    {
-        descId = ModStrings::AllocateId();
-        std::wstring wName = Utf8ToWide(displayName);
-        ModStrings::Register(descId, wName.c_str());
-    }
-
     if (!GameObjectFactory::CreateTile(id, materialId, hardness, resistance,
-                                        soundType, wIcon.empty() ? nullptr : wIcon.c_str(), descId))
+                                       soundType, wIcon.empty() ? nullptr : wIcon.c_str(), lightEmission, lightBlock, descId))
     {
         LogUtil::Log("[WeaveLoader] Warning: failed to create game Tile for block '%s' id=%d", namespacedId, id);
     }
 
-    if (requiredHarvestLevel >= 0 || requiredTool != 0)
+    if (requiredHarvestLevel >= 0 || requiredTool != 0 || acceptsRedstonePower != 0)
     {
-        CustomBlockRegistry::Register(id, requiredHarvestLevel, requiredTool);
+        CustomBlockRegistry::Register(id, requiredHarvestLevel, requiredTool, acceptsRedstonePower != 0);
     }
 
     return id;
+}
+
+int native_register_managed_block(
+    const char* namespacedId,
+    int materialId,
+    float hardness,
+    float resistance,
+    int soundType,
+    const char* iconName,
+    float lightEmission,
+    int lightBlock,
+    const char* displayName,
+    int requiredHarvestLevel,
+    int requiredTool,
+    int acceptsRedstonePower)
+{
+    if (!namespacedId) return -1;
+
+    int id = -1;
+    int descId = -1;
+    std::wstring wIcon;
+    if (!PrepareBlockRegistration(namespacedId, iconName, displayName, &id, &descId, &wIcon))
+        return -1;
+
+    if (!GameObjectFactory::CreateManagedTile(id, materialId, hardness, resistance,
+            soundType, wIcon.empty() ? nullptr : wIcon.c_str(), lightEmission, lightBlock, descId))
+    {
+        LogUtil::Log("[WeaveLoader] Warning: failed to create managed Tile for '%s' id=%d", namespacedId, id);
+    }
+
+    ManagedBlockRegistry::Register(id);
+
+    if (requiredHarvestLevel >= 0 || requiredTool != 0 || acceptsRedstonePower != 0)
+    {
+        CustomBlockRegistry::Register(id, requiredHarvestLevel, requiredTool, acceptsRedstonePower != 0);
+    }
+
+    return id;
+}
+
+int native_register_falling_block(
+    const char* namespacedId,
+    int materialId,
+    float hardness,
+    float resistance,
+    int soundType,
+    const char* iconName,
+    float lightEmission,
+    int lightBlock,
+    const char* displayName,
+    int requiredHarvestLevel,
+    int requiredTool,
+    int acceptsRedstonePower)
+{
+    int id = -1;
+    int descId = -1;
+    std::wstring wIcon;
+    if (!PrepareBlockRegistration(namespacedId, iconName, displayName, &id, &descId, &wIcon))
+        return -1;
+
+    if (!GameObjectFactory::CreateFallingTile(id, materialId, hardness, resistance,
+            soundType, wIcon.empty() ? nullptr : wIcon.c_str(), lightEmission, lightBlock, descId))
+    {
+        LogUtil::Log("[WeaveLoader] Warning: failed to create falling Tile for '%s' id=%d", namespacedId, id);
+    }
+
+    ManagedBlockRegistry::Register(id);
+
+    if (requiredHarvestLevel >= 0 || requiredTool != 0 || acceptsRedstonePower != 0)
+        CustomBlockRegistry::Register(id, requiredHarvestLevel, requiredTool, acceptsRedstonePower != 0);
+
+    return id;
+}
+
+int native_register_slab_block(
+    const char* namespacedId,
+    int materialId,
+    float hardness,
+    float resistance,
+    int soundType,
+    const char* iconName,
+    float lightEmission,
+    int lightBlock,
+    const char* displayName,
+    int requiredHarvestLevel,
+    int requiredTool,
+    int acceptsRedstonePower,
+    int* outDoubleBlockNumericId)
+{
+    if (!namespacedId) return -1;
+
+    int halfId = -1;
+    int descId = -1;
+    std::wstring wIcon;
+    if (!PrepareBlockRegistration(namespacedId, iconName, displayName, &halfId, &descId, &wIcon))
+        return -1;
+
+    std::string fullName = std::string(namespacedId) + "_double";
+    int fullId = IdRegistry::Instance().Register(IdRegistry::Type::Block, fullName.c_str());
+    if (fullId < 0)
+    {
+        LogUtil::Log("[WeaveLoader] Failed to allocate double slab block ID for '%s'", namespacedId);
+        return -1;
+    }
+
+    if (outDoubleBlockNumericId)
+        *outDoubleBlockNumericId = fullId;
+
+    if (!GameObjectFactory::CreateSlabPair(halfId, fullId, materialId, hardness, resistance,
+            soundType, wIcon.empty() ? nullptr : wIcon.c_str(), lightEmission, lightBlock, descId))
+    {
+        LogUtil::Log("[WeaveLoader] Warning: failed to create slab pair for '%s' half=%d full=%d", namespacedId, halfId, fullId);
+    }
+
+    if (requiredHarvestLevel >= 0 || requiredTool != 0 || acceptsRedstonePower != 0)
+    {
+        CustomBlockRegistry::Register(halfId, requiredHarvestLevel, requiredTool, acceptsRedstonePower != 0);
+        CustomBlockRegistry::Register(fullId, requiredHarvestLevel, requiredTool, acceptsRedstonePower != 0);
+    }
+
+    return halfId;
+}
+
+void native_configure_managed_block(int numericBlockId, int dropNumericBlockId, int cloneNumericBlockId)
+{
+    if (numericBlockId < 0)
+        return;
+    ManagedBlockRegistry::Configure(numericBlockId, dropNumericBlockId, cloneNumericBlockId);
 }
 
 int native_register_item(
@@ -458,6 +629,38 @@ int native_summon_entity_by_id(int numericEntityId, double x, double y, double z
     LogUtil::Log("[WeaveLoader] Summoned entity=%d at (%.2f, %.2f, %.2f)",
                  numericEntityId, x, y, z);
     return 1;
+}
+
+int native_level_has_neighbor_signal(void* levelPtr, int x, int y, int z)
+{
+    return (levelPtr && s_levelHasNeighborSignal && s_levelHasNeighborSignal(levelPtr, x, y, z)) ? 1 : 0;
+}
+
+int native_level_set_tile(void* levelPtr, int x, int y, int z, int blockId, int data, int flags)
+{
+    return (levelPtr && s_levelSetTileAndData && s_levelSetTileAndData(levelPtr, x, y, z, blockId, data, flags)) ? 1 : 0;
+}
+
+int native_level_schedule_tick(void* levelPtr, int x, int y, int z, int blockId, int delay)
+{
+    if (!levelPtr)
+        return 0;
+    if (ManagedBlockRegistry::IsManaged(blockId))
+    {
+        GameHooks::EnqueueManagedBlockTick(levelPtr, x, y, z, blockId, delay);
+        return 1;
+    }
+    if (!s_levelAddToTickNextTick)
+        return 0;
+    s_levelAddToTickNextTick(levelPtr, x, y, z, blockId, delay);
+    return 1;
+}
+
+int native_level_get_tile(void* levelPtr, int x, int y, int z)
+{
+    if (!levelPtr || !s_levelGetTile)
+        return -1;
+    return s_levelGetTile(levelPtr, x, y, z);
 }
 
 int native_summon_entity(const char* namespacedId, double x, double y, double z)

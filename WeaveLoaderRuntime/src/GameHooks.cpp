@@ -7,6 +7,8 @@
 #include "CustomPickaxeRegistry.h"
 #include "CustomToolMaterialRegistry.h"
 #include "CustomBlockRegistry.h"
+#include "ManagedBlockRegistry.h"
+#include "CustomSlabRegistry.h"
 #include "LogUtil.h"
 #include <Windows.h>
 #include <string>
@@ -47,6 +49,28 @@ namespace GameHooks
     PickaxeCanDestroySpecial_fn Original_PickaxeItemCanDestroySpecial = nullptr;
     PickaxeGetDestroySpeed_fn Original_ShovelItemGetDestroySpeed = nullptr;
     PickaxeCanDestroySpecial_fn Original_ShovelItemCanDestroySpecial = nullptr;
+    TileOnPlace_fn Original_TileOnPlace = nullptr;
+    TileNeighborChanged_fn Original_TileNeighborChanged = nullptr;
+    TileTick_fn Original_TileTick = nullptr;
+    LevelSetTileAndDataDispatch_fn Original_LevelSetTileAndData = nullptr;
+    LevelSetDataDispatch_fn Original_LevelSetData = nullptr;
+    LevelUpdateNeighborsAtDispatch_fn Original_LevelUpdateNeighborsAt = nullptr;
+    ServerLevelTickPendingTicks_fn Original_ServerLevelTickPendingTicks = nullptr;
+    TileGetResource_fn Original_TileGetResource = nullptr;
+    TileCloneTileId_fn Original_TileCloneTileId = nullptr;
+    TileGetTextureFaceData_fn Original_StoneSlabGetTexture = nullptr;
+    TileGetTextureFaceData_fn Original_WoodSlabGetTexture = nullptr;
+    TileGetResource_fn Original_StoneSlabGetResource = nullptr;
+    TileGetResource_fn Original_WoodSlabGetResource = nullptr;
+    TileGetDescriptionId_fn Original_StoneSlabGetDescriptionId = nullptr;
+    TileGetDescriptionId_fn Original_WoodSlabGetDescriptionId = nullptr;
+    TileGetAuxName_fn Original_StoneSlabGetAuxName = nullptr;
+    TileGetAuxName_fn Original_WoodSlabGetAuxName = nullptr;
+    TileRegisterIcons_fn Original_StoneSlabRegisterIcons = nullptr;
+    TileRegisterIcons_fn Original_WoodSlabRegisterIcons = nullptr;
+    StoneSlabItemGetIcon_fn Original_StoneSlabItemGetIcon = nullptr;
+    StoneSlabItemGetDescriptionId_fn Original_StoneSlabItemGetDescriptionId = nullptr;
+    TileCloneTileId_fn Original_HalfSlabCloneTileId = nullptr;
     PlayerCanDestroy_fn Original_PlayerCanDestroy = nullptr;
     GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem = nullptr;
     GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem = nullptr;
@@ -76,6 +100,7 @@ namespace GameHooks
     static constexpr ptrdiff_t kLevelIsClientSideOffset = 0x268;
     static constexpr ptrdiff_t kItemIdOffset = 0x20;
     static constexpr ptrdiff_t kTileIdOffset = 0x28;
+    static constexpr ptrdiff_t kTileIconOffset = 0x78;
     static constexpr ptrdiff_t kEntityXOffset = 0x78;
     static constexpr ptrdiff_t kEntityYOffset = 0x80;
     static constexpr ptrdiff_t kEntityZOffset = 0x88;
@@ -117,7 +142,24 @@ namespace GameHooks
     static std::vector<void*> s_spawnedEntities;
     static int s_outOfWorldGuardLogCount = 0;
     static int s_pendingServerUseItemId = -1;
+    static LevelGetTile_fn s_levelGetTile = nullptr;
+
+    struct ManagedScheduledTick
+    {
+        void* levelPtr;
+        int x;
+        int y;
+        int z;
+        int blockId;
+        int remainingTicks;
+    };
+
+    static std::vector<ManagedScheduledTick> s_managedScheduledTicks;
     static ULONGLONG s_pendingServerUseExpiryMs = 0;
+    static TileGetTextureFaceData_fn s_tileGetTextureFaceData = nullptr;
+    static bool s_preInitCalled = false;
+    static bool s_initCalled = false;
+    static bool s_postInitCalled = false;
 
     static void EnsurePageResourcesInitialized()
     {
@@ -194,6 +236,53 @@ namespace GameHooks
         if (p + bytes < p)
             return false;
         return (p + bytes) <= end;
+    }
+
+    static void* TryReadTileIcon(void* tilePtr)
+    {
+        if (!tilePtr)
+            return nullptr;
+
+        const void* iconSlot = static_cast<const char*>(tilePtr) + kTileIconOffset;
+        if (!IsReadableRange(iconSlot, sizeof(void*)))
+            return nullptr;
+
+        void* iconPtr = *reinterpret_cast<void* const*>(iconSlot);
+        if (!IsCanonicalUserPtr(iconPtr))
+            return nullptr;
+
+        return iconPtr;
+    }
+
+    static void PatchSingleSlabIcon(const CustomSlabRegistry::Definition& def, void*)
+    {
+        if (def.iconName.empty() || !s_tileTilesArray || !IsReadableRange(s_tileTilesArray, sizeof(void*)))
+            return;
+
+        void* modIcon = ModAtlas::LookupModIcon(def.iconName);
+        if (!modIcon)
+            return;
+
+        const void* arrayPtr = *reinterpret_cast<const void* const*>(s_tileTilesArray);
+        if (!arrayPtr || !IsReadableRange(arrayPtr, sizeof(void*) * 4096))
+            return;
+
+        auto* tiles = reinterpret_cast<void* const*>(const_cast<void*>(arrayPtr));
+        const int ids[] = { def.halfBlockId, def.fullBlockId };
+        for (int blockId : ids)
+        {
+            if (blockId < 0 || blockId >= 4096)
+                continue;
+            void* tilePtr = const_cast<void*>(tiles[blockId]);
+            if (!tilePtr || !IsReadableRange(static_cast<const char*>(tilePtr) + kTileIconOffset, sizeof(void*)))
+                continue;
+            *reinterpret_cast<void**>(static_cast<char*>(tilePtr) + kTileIconOffset) = modIcon;
+        }
+    }
+
+    static void PatchCustomSlabIcons()
+    {
+        CustomSlabRegistry::ForEachUnique(&PatchSingleSlabIcon, nullptr);
     }
 
     static std::wstring BuildVirtualAtlasPath(int atlasType, int page)
@@ -421,6 +510,39 @@ namespace GameHooks
         s_livingEntityGetViewVector = reinterpret_cast<LivingEntityGetViewVector_fn>(livingEntityGetViewVector);
         s_entityLerpMotion = reinterpret_cast<EntityLerpMotion_fn>(entityLerpMotion);
         s_entitySetPos = reinterpret_cast<EntitySetPos_fn>(entitySetPos);
+    }
+
+    void SetBlockHelperSymbols(void* tileGetTextureFaceData)
+    {
+        s_tileGetTextureFaceData = reinterpret_cast<TileGetTextureFaceData_fn>(tileGetTextureFaceData);
+    }
+
+    void SetManagedBlockDispatchSymbols(void* levelGetTile)
+    {
+        s_levelGetTile = reinterpret_cast<LevelGetTile_fn>(levelGetTile);
+    }
+
+    void EnqueueManagedBlockTick(void* levelPtr, int x, int y, int z, int blockId, int delay)
+    {
+        if (!levelPtr || blockId < 0 || !ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        const int normalizedDelay = delay > 0 ? delay : 1;
+        for (ManagedScheduledTick& tick : s_managedScheduledTicks)
+        {
+            if (tick.levelPtr == levelPtr &&
+                tick.x == x &&
+                tick.y == y &&
+                tick.z == z &&
+                tick.blockId == blockId)
+            {
+                if (normalizedDelay < tick.remainingTicks)
+                    tick.remainingTicks = normalizedDelay;
+                return;
+            }
+        }
+
+        s_managedScheduledTicks.push_back({ levelPtr, x, y, z, blockId, normalizedDelay });
     }
 
     static bool IsInventoryObjectPtr(void* objectPtr)
@@ -851,6 +973,344 @@ namespace GameHooks
         return nullptr;
     }
 
+    static int TryReadTileId(void* tilePtr)
+    {
+        if (!tilePtr || !IsReadableRange(static_cast<char*>(tilePtr) + kTileIdOffset, sizeof(int)))
+            return -1;
+        return *reinterpret_cast<int*>(static_cast<char*>(tilePtr) + kTileIdOffset);
+    }
+
+    static void DispatchManagedBlockUpdate(void* tilePtr, void* level, int x, int y, int z, int eventKind, int neighborBlockId)
+    {
+        const int blockId = TryReadTileId(tilePtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        struct BlockUpdateNativeArgs
+        {
+            int blockId;
+            int isClientSide;
+            void* levelPtr;
+            int x;
+            int y;
+            int z;
+        };
+        struct BlockNeighborChangedNativeArgs
+        {
+            BlockUpdateNativeArgs block;
+            int neighborBlockId;
+        };
+
+        if (eventKind == 0)
+        {
+            BlockUpdateNativeArgs args{ blockId, isClientSide, level, x, y, z };
+            DotNetHost::CallBlockOnPlace(&args, sizeof(args));
+        }
+        else if (eventKind == 1)
+        {
+            BlockNeighborChangedNativeArgs args{};
+            args.block = { blockId, isClientSide, level, x, y, z };
+            args.neighborBlockId = neighborBlockId;
+            DotNetHost::CallBlockNeighborChanged(&args, sizeof(args));
+        }
+        else if (eventKind == 2)
+        {
+            BlockUpdateNativeArgs args{ blockId, isClientSide, level, x, y, z };
+            DotNetHost::CallBlockTick(&args, sizeof(args));
+        }
+    }
+
+    static void DispatchManagedBlockById(int blockId, void* level, int x, int y, int z, int eventKind, int neighborBlockId)
+    {
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        struct BlockUpdateNativeArgs
+        {
+            int blockId;
+            int isClientSide;
+            void* levelPtr;
+            int x;
+            int y;
+            int z;
+        };
+        struct BlockNeighborChangedNativeArgs
+        {
+            BlockUpdateNativeArgs block;
+            int neighborBlockId;
+        };
+
+        if (eventKind == 0)
+        {
+            BlockUpdateNativeArgs args{ blockId, isClientSide, level, x, y, z };
+            DotNetHost::CallBlockOnPlace(&args, sizeof(args));
+        }
+        else if (eventKind == 1)
+        {
+            BlockNeighborChangedNativeArgs args{};
+            args.block = { blockId, isClientSide, level, x, y, z };
+            args.neighborBlockId = neighborBlockId;
+            DotNetHost::CallBlockNeighborChanged(&args, sizeof(args));
+        }
+        else if (eventKind == 2)
+        {
+            BlockUpdateNativeArgs args{ blockId, isClientSide, level, x, y, z };
+            DotNetHost::CallBlockTick(&args, sizeof(args));
+        }
+    }
+
+    void __fastcall Hooked_TileOnPlace(void* thisPtr, void* level, int x, int y, int z)
+    {
+        if (Original_TileOnPlace)
+            Original_TileOnPlace(thisPtr, level, x, y, z);
+        DispatchManagedBlockUpdate(thisPtr, level, x, y, z, 0, 0);
+    }
+
+    void __fastcall Hooked_TileNeighborChanged(void* thisPtr, void* level, int x, int y, int z, int type)
+    {
+        if (Original_TileNeighborChanged)
+            Original_TileNeighborChanged(thisPtr, level, x, y, z, type);
+        DispatchManagedBlockUpdate(thisPtr, level, x, y, z, 1, type);
+    }
+
+    void __fastcall Hooked_TileTick(void* thisPtr, void* level, int x, int y, int z, void* random)
+    {
+        if (Original_TileTick)
+            Original_TileTick(thisPtr, level, x, y, z, random);
+        DispatchManagedBlockUpdate(thisPtr, level, x, y, z, 2, 0);
+    }
+
+    bool __fastcall Hooked_LevelSetTileAndData(void* thisPtr, int x, int y, int z, int tile, int data, int updateFlags)
+    {
+        const bool result = Original_LevelSetTileAndData
+            ? Original_LevelSetTileAndData(thisPtr, x, y, z, tile, data, updateFlags)
+            : false;
+
+        if (result && tile > 0)
+            DispatchManagedBlockById(tile, thisPtr, x, y, z, 0, 0);
+
+        return result;
+    }
+
+    bool __fastcall Hooked_LevelSetData(void* thisPtr, int x, int y, int z, int data, int updateFlags, bool forceUpdate)
+    {
+        const bool result = Original_LevelSetData
+            ? Original_LevelSetData(thisPtr, x, y, z, data, updateFlags, forceUpdate)
+            : false;
+
+        return result;
+    }
+
+    void __fastcall Hooked_LevelUpdateNeighborsAt(void* thisPtr, int x, int y, int z, int type)
+    {
+        if (Original_LevelUpdateNeighborsAt)
+            Original_LevelUpdateNeighborsAt(thisPtr, x, y, z, type);
+
+        if (!s_levelGetTile)
+            return;
+
+        static const int kNeighborOffsets[6][3] = {
+            {-1, 0, 0}, {1, 0, 0},
+            {0, -1, 0}, {0, 1, 0},
+            {0, 0, -1}, {0, 0, 1}
+        };
+
+        for (const auto& offset : kNeighborOffsets)
+        {
+            const int nx = x + offset[0];
+            const int ny = y + offset[1];
+            const int nz = z + offset[2];
+            const int neighborBlockId = s_levelGetTile(thisPtr, nx, ny, nz);
+            DispatchManagedBlockById(neighborBlockId, thisPtr, nx, ny, nz, 1, type);
+        }
+    }
+
+    bool __fastcall Hooked_ServerLevelTickPendingTicks(void* thisPtr, bool force)
+    {
+        const bool originalResult = Original_ServerLevelTickPendingTicks
+            ? Original_ServerLevelTickPendingTicks(thisPtr, force)
+            : false;
+
+        bool anyPending = false;
+        for (auto it = s_managedScheduledTicks.begin(); it != s_managedScheduledTicks.end();)
+        {
+            if (it->levelPtr != thisPtr)
+            {
+                ++it;
+                continue;
+            }
+
+            --it->remainingTicks;
+            if (it->remainingTicks <= 0)
+            {
+                DispatchManagedBlockById(it->blockId, it->levelPtr, it->x, it->y, it->z, 2, 0);
+                it = s_managedScheduledTicks.erase(it);
+            }
+            else
+            {
+                anyPending = true;
+                ++it;
+            }
+        }
+
+        return originalResult || anyPending;
+    }
+
+    int __fastcall Hooked_TileGetResource(void* thisPtr, int data, void* random, int playerBonusLevel)
+    {
+        const ManagedBlockRegistry::Definition* def = ManagedBlockRegistry::Find(TryReadTileId(thisPtr));
+        if (def && def->dropBlockId >= 0)
+            return def->dropBlockId;
+        return Original_TileGetResource ? Original_TileGetResource(thisPtr, data, random, playerBonusLevel) : 0;
+    }
+
+    int __fastcall Hooked_TileCloneTileId(void* thisPtr, void* level, int x, int y, int z)
+    {
+        const ManagedBlockRegistry::Definition* def = ManagedBlockRegistry::Find(TryReadTileId(thisPtr));
+        if (def && def->cloneBlockId >= 0)
+            return def->cloneBlockId;
+        return Original_TileCloneTileId ? Original_TileCloneTileId(thisPtr, level, x, y, z) : TryReadTileId(thisPtr);
+    }
+
+    void* __fastcall Hooked_StoneSlabGetTexture(void* thisPtr, int face, int data)
+    {
+        if (CustomSlabRegistry::Find(TryReadTileId(thisPtr)))
+        {
+            if (void* iconPtr = TryReadTileIcon(thisPtr))
+                return iconPtr;
+        }
+        return Original_StoneSlabGetTexture ? Original_StoneSlabGetTexture(thisPtr, face, data) : nullptr;
+    }
+
+    void* __fastcall Hooked_WoodSlabGetTexture(void* thisPtr, int face, int data)
+    {
+        if (CustomSlabRegistry::Find(TryReadTileId(thisPtr)))
+        {
+            if (void* iconPtr = TryReadTileIcon(thisPtr))
+                return iconPtr;
+        }
+        return Original_WoodSlabGetTexture ? Original_WoodSlabGetTexture(thisPtr, face, data) : nullptr;
+    }
+
+    int __fastcall Hooked_StoneSlabGetResource(void* thisPtr, int data, void* random, int playerBonusLevel)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def)
+            return def->halfBlockId;
+        return Original_StoneSlabGetResource ? Original_StoneSlabGetResource(thisPtr, data, random, playerBonusLevel) : 0;
+    }
+
+    int __fastcall Hooked_WoodSlabGetResource(void* thisPtr, int data, void* random, int playerBonusLevel)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def)
+            return def->halfBlockId;
+        return Original_WoodSlabGetResource ? Original_WoodSlabGetResource(thisPtr, data, random, playerBonusLevel) : 0;
+    }
+
+    unsigned int __fastcall Hooked_StoneSlabGetDescriptionId(void* thisPtr, int data)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def && def->descriptionId >= 0)
+            return static_cast<unsigned int>(def->descriptionId);
+        return Original_StoneSlabGetDescriptionId ? Original_StoneSlabGetDescriptionId(thisPtr, data) : 0;
+    }
+
+    unsigned int __fastcall Hooked_WoodSlabGetDescriptionId(void* thisPtr, int data)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def && def->descriptionId >= 0)
+            return static_cast<unsigned int>(def->descriptionId);
+        return Original_WoodSlabGetDescriptionId ? Original_WoodSlabGetDescriptionId(thisPtr, data) : 0;
+    }
+
+    int __fastcall Hooked_StoneSlabGetAuxName(void* thisPtr, int auxValue)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def && def->descriptionId >= 0)
+            return def->descriptionId;
+        return Original_StoneSlabGetAuxName ? Original_StoneSlabGetAuxName(thisPtr, auxValue) : 0;
+    }
+
+    int __fastcall Hooked_WoodSlabGetAuxName(void* thisPtr, int auxValue)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def && def->descriptionId >= 0)
+            return def->descriptionId;
+        return Original_WoodSlabGetAuxName ? Original_WoodSlabGetAuxName(thisPtr, auxValue) : 0;
+    }
+
+    void __fastcall Hooked_StoneSlabRegisterIcons(void* thisPtr, void* iconRegister)
+    {
+        if (Original_StoneSlabRegisterIcons)
+            Original_StoneSlabRegisterIcons(thisPtr, iconRegister);
+    }
+
+    void __fastcall Hooked_WoodSlabRegisterIcons(void* thisPtr, void* iconRegister)
+    {
+        if (Original_WoodSlabRegisterIcons)
+            Original_WoodSlabRegisterIcons(thisPtr, iconRegister);
+    }
+
+    void* __fastcall Hooked_StoneSlabItemGetIcon(void* thisPtr, int auxValue)
+    {
+        if (thisPtr && IsReadableRange(static_cast<const char*>(thisPtr) + kItemIdOffset, sizeof(int)))
+        {
+            const int itemId = *reinterpret_cast<const int*>(static_cast<const char*>(thisPtr) + kItemIdOffset);
+            const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(itemId);
+            if (def && s_tileTilesArray && IsReadableRange(s_tileTilesArray, sizeof(void*)))
+            {
+                const void* arrayPtr = *reinterpret_cast<const void* const*>(s_tileTilesArray);
+                if (arrayPtr && IsReadableRange(arrayPtr, sizeof(void*) * 4096))
+                {
+                    auto* tiles = reinterpret_cast<void* const*>(const_cast<void*>(arrayPtr));
+                    if (def->halfBlockId >= 0 && def->halfBlockId < 4096)
+                    {
+                        void* halfTile = const_cast<void*>(tiles[def->halfBlockId]);
+                        void* iconPtr = TryReadTileIcon(halfTile);
+                        if (iconPtr)
+                            return iconPtr;
+                    }
+                }
+            }
+        }
+
+        return Original_StoneSlabItemGetIcon
+            ? Original_StoneSlabItemGetIcon(thisPtr, auxValue)
+            : nullptr;
+    }
+
+    unsigned int __fastcall Hooked_StoneSlabItemGetDescriptionId(void* thisPtr, void* itemInstanceSharedPtr)
+    {
+        if (thisPtr && IsReadableRange(static_cast<const char*>(thisPtr) + kItemIdOffset, sizeof(int)))
+        {
+            const int itemId = *reinterpret_cast<const int*>(static_cast<const char*>(thisPtr) + kItemIdOffset);
+            const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(itemId);
+            if (def && def->descriptionId >= 0)
+                return static_cast<unsigned int>(def->descriptionId);
+        }
+
+        return Original_StoneSlabItemGetDescriptionId
+            ? Original_StoneSlabItemGetDescriptionId(thisPtr, itemInstanceSharedPtr)
+            : 0;
+    }
+
+    int __fastcall Hooked_HalfSlabCloneTileId(void* thisPtr, void* level, int x, int y, int z)
+    {
+        const CustomSlabRegistry::Definition* def = CustomSlabRegistry::Find(TryReadTileId(thisPtr));
+        if (def)
+            return def->halfBlockId;
+        return Original_HalfSlabCloneTileId ? Original_HalfSlabCloneTileId(thisPtr, level, x, y, z) : TryReadTileId(thisPtr);
+    }
+
     void __fastcall Hooked_LoadUVs(void* thisPtr)
     {
         LogUtil::Log("[WeaveLoader] Hooked_LoadUVs: ENTER (textureMap=%p)", thisPtr);
@@ -858,6 +1318,7 @@ namespace GameHooks
             Original_LoadUVs(thisPtr);
         LogUtil::Log("[WeaveLoader] Hooked_LoadUVs: original returned, creating mod icons");
         ModAtlas::CreateModIcons(thisPtr);
+        PatchCustomSlabIcons();
         LogUtil::Log("[WeaveLoader] Hooked_LoadUVs: DONE");
     }
 
@@ -1585,11 +2046,13 @@ namespace GameHooks
     {
         LogUtil::Log("[WeaveLoader] Hook: RunStaticCtors -- calling PreInit");
         DotNetHost::CallPreInit();
+        s_preInitCalled = true;
 
         Original_RunStaticCtors();
 
         LogUtil::Log("[WeaveLoader] Hook: RunStaticCtors complete -- calling Init");
         DotNetHost::CallInit();
+        s_initCalled = true;
 
         // Inject mod strings directly into the game's StringTable vector.
         // This is necessary because the compiler inlines GetString at call
@@ -1653,8 +2116,26 @@ namespace GameHooks
         // fully populated. Copy it to our mod icons so getSourceHeight() works.
         ModAtlas::FixupModIcons();
 
-        LogUtil::Log("[WeaveLoader] Hook: Minecraft::init complete -- calling PostInit");
-        DotNetHost::CallPostInit();
+        if (!s_preInitCalled)
+        {
+            LogUtil::Log("[WeaveLoader] Hook: Minecraft::init -- late PreInit fallback");
+            DotNetHost::CallPreInit();
+            s_preInitCalled = true;
+        }
+        if (!s_initCalled)
+        {
+            LogUtil::Log("[WeaveLoader] Hook: Minecraft::init -- late Init fallback");
+            DotNetHost::CallInit();
+            s_initCalled = true;
+            ModStrings::InjectAllIntoGameTable();
+        }
+
+        if (!s_postInitCalled)
+        {
+            LogUtil::Log("[WeaveLoader] Hook: Minecraft::init complete -- calling PostInit");
+            DotNetHost::CallPostInit();
+            s_postInitCalled = true;
+        }
     }
 
     void __fastcall Hooked_ExitGame(void* thisPtr)

@@ -22,7 +22,54 @@ internal static class NativeInterop
         int lightBlock,
         string displayName,
         int requiredHarvestLevel,
-        int requiredTool);
+        int requiredTool,
+        int acceptsRedstonePower);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_managed_block(
+        string namespacedId,
+        int materialId,
+        float hardness,
+        float resistance,
+        int soundType,
+        string iconName,
+        float lightEmission,
+        int lightBlock,
+        string displayName,
+        int requiredHarvestLevel,
+        int requiredTool,
+        int acceptsRedstonePower);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_falling_block(
+        string namespacedId,
+        int materialId,
+        float hardness,
+        float resistance,
+        int soundType,
+        string iconName,
+        float lightEmission,
+        int lightBlock,
+        string displayName,
+        int requiredHarvestLevel,
+        int requiredTool,
+        int acceptsRedstonePower);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_register_slab_block(
+        string namespacedId,
+        int materialId,
+        float hardness,
+        float resistance,
+        int soundType,
+        string iconName,
+        float lightEmission,
+        int lightBlock,
+        string displayName,
+        int requiredHarvestLevel,
+        int requiredTool,
+        int acceptsRedstonePower,
+        out int doubleNumericBlockId);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern int native_register_item(
@@ -77,6 +124,12 @@ internal static class NativeInterop
         int numericItemId,
         int harvestLevel,
         float destroySpeed);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void native_configure_managed_block(
+        int numericBlockId,
+        int dropNumericBlockId,
+        int cloneNumericBlockId);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
     internal static extern int native_configure_custom_tool_item(
@@ -144,6 +197,18 @@ internal static class NativeInterop
         double speed,
         double spawnForward,
         double spawnUp);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_level_has_neighbor_signal(nint levelPtr, int x, int y, int z);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_level_set_tile(nint levelPtr, int x, int y, int z, int blockId, int data, int flags);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_level_schedule_tick(nint levelPtr, int x, int y, int z, int blockId, int delay);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_level_get_tile(nint levelPtr, int x, int y, int z);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern void native_subscribe_event(string eventName, IntPtr managedFnPtr);

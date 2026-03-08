@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using WeaveLoader.API;
 using WeaveLoader.API.Events;
+using WeaveLoader.API.Block;
 using WeaveLoader.API.Item;
 
 namespace WeaveLoader.Core;
@@ -117,6 +118,45 @@ public static class WeaveLoaderCore
         catch (Exception ex)
         {
             Logger.Error($"OnItemUse EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockPlace(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandlePlace(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockPlace EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockNeighborChanged(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleNeighborChanged(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockNeighborChanged EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockTick(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleScheduledTick(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockTick EXCEPTION: {ex}");
             return 0;
         }
     }

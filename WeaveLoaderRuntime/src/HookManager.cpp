@@ -7,6 +7,7 @@
 #include "MainMenuOverlay.h"
 #include "GameObjectFactory.h"
 #include "FurnaceRecipeRegistry.h"
+#include "NativeExports.h"
 #include "LogUtil.h"
 #include <MinHook.h>
 
@@ -292,6 +293,274 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
+    if (symbols.pLevelSetTileAndData)
+    {
+        if (MH_CreateHook(symbols.pLevelSetTileAndData,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_LevelSetTileAndData),
+                          reinterpret_cast<void**>(&GameHooks::Original_LevelSetTileAndData)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Level::setTileAndData");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Level::setTileAndData (managed block callbacks)");
+        }
+    }
+
+    if (symbols.pLevelSetData)
+    {
+        if (MH_CreateHook(symbols.pLevelSetData,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_LevelSetData),
+                          reinterpret_cast<void**>(&GameHooks::Original_LevelSetData)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Level::setData");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Level::setData (managed block callbacks)");
+        }
+    }
+
+    if (symbols.pLevelUpdateNeighborsAt)
+    {
+        if (MH_CreateHook(symbols.pLevelUpdateNeighborsAt,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_LevelUpdateNeighborsAt),
+                          reinterpret_cast<void**>(&GameHooks::Original_LevelUpdateNeighborsAt)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Level::updateNeighborsAt");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Level::updateNeighborsAt (managed block callbacks)");
+        }
+    }
+
+    if (symbols.pServerLevelTickPendingTicks)
+    {
+        if (MH_CreateHook(symbols.pServerLevelTickPendingTicks,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ServerLevelTickPendingTicks),
+                          reinterpret_cast<void**>(&GameHooks::Original_ServerLevelTickPendingTicks)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ServerLevel::tickPendingTicks");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ServerLevel::tickPendingTicks (managed block callbacks)");
+        }
+    }
+
+    if (symbols.pTileGetResource)
+    {
+        if (MH_CreateHook(symbols.pTileGetResource,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TileGetResource),
+                          reinterpret_cast<void**>(&GameHooks::Original_TileGetResource)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::getResource");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Tile::getResource (managed block drops)");
+        }
+    }
+
+    if (symbols.pTileCloneTileId)
+    {
+        if (MH_CreateHook(symbols.pTileCloneTileId,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TileCloneTileId),
+                          reinterpret_cast<void**>(&GameHooks::Original_TileCloneTileId)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::cloneTileId");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Tile::cloneTileId (managed block pick-block)");
+        }
+    }
+
+    if (symbols.pStoneSlabGetTexture)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabGetTexture,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetTexture),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetTexture)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTile::getTexture");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTile::getTexture (custom slabs)");
+        }
+    }
+
+    if (symbols.pWoodSlabGetTexture)
+    {
+        if (MH_CreateHook(symbols.pWoodSlabGetTexture,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetTexture),
+                          reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetTexture)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook WoodSlabTile::getTexture");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked WoodSlabTile::getTexture (custom slabs)");
+        }
+    }
+
+    if (symbols.pStoneSlabGetResource)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabGetResource,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetResource),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetResource)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTile::getResource");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTile::getResource (custom slabs)");
+        }
+    }
+
+    if (symbols.pWoodSlabGetResource)
+    {
+        if (MH_CreateHook(symbols.pWoodSlabGetResource,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetResource),
+                          reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetResource)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook WoodSlabTile::getResource");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked WoodSlabTile::getResource (custom slabs)");
+        }
+    }
+
+    if (symbols.pStoneSlabGetDescriptionId)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabGetDescriptionId,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetDescriptionId),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetDescriptionId)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTile::getDescriptionId");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTile::getDescriptionId (custom slabs)");
+        }
+    }
+
+    if (symbols.pWoodSlabGetDescriptionId)
+    {
+        if (MH_CreateHook(symbols.pWoodSlabGetDescriptionId,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetDescriptionId),
+                          reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetDescriptionId)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook WoodSlabTile::getDescriptionId");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked WoodSlabTile::getDescriptionId (custom slabs)");
+        }
+    }
+
+    if (symbols.pStoneSlabGetAuxName)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabGetAuxName,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetAuxName),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetAuxName)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTile::getAuxName");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTile::getAuxName (custom slabs)");
+        }
+    }
+
+    if (symbols.pWoodSlabGetAuxName)
+    {
+        if (MH_CreateHook(symbols.pWoodSlabGetAuxName,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetAuxName),
+                          reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetAuxName)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook WoodSlabTile::getAuxName");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked WoodSlabTile::getAuxName (custom slabs)");
+        }
+    }
+
+    if (symbols.pStoneSlabRegisterIcons)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabRegisterIcons,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabRegisterIcons),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabRegisterIcons)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTile::registerIcons");
+        }
+        else
+        {
+            MH_EnableHook(symbols.pStoneSlabRegisterIcons);
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTile::registerIcons (custom slabs)");
+        }
+    }
+
+    if (symbols.pWoodSlabRegisterIcons)
+    {
+        if (MH_CreateHook(symbols.pWoodSlabRegisterIcons,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabRegisterIcons),
+                          reinterpret_cast<void**>(&GameHooks::Original_WoodSlabRegisterIcons)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook WoodSlabTile::registerIcons");
+        }
+        else
+        {
+            MH_EnableHook(symbols.pWoodSlabRegisterIcons);
+            LogUtil::Log("[WeaveLoader] Hooked WoodSlabTile::registerIcons (custom slabs)");
+        }
+    }
+
+    if (symbols.pHalfSlabCloneTileId)
+    {
+        if (MH_CreateHook(symbols.pHalfSlabCloneTileId,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_HalfSlabCloneTileId),
+                          reinterpret_cast<void**>(&GameHooks::Original_HalfSlabCloneTileId)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook HalfSlabTile::cloneTileId");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked HalfSlabTile::cloneTileId (custom slabs)");
+        }
+    }
+
+    if (symbols.pStoneSlabItemGetDescriptionId)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabItemGetDescriptionId,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabItemGetDescriptionId),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabItemGetDescriptionId)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTileItem::getDescriptionId");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTileItem::getDescriptionId (custom slabs)");
+        }
+    }
+
+    if (symbols.pStoneSlabItemGetIcon)
+    {
+        if (MH_CreateHook(symbols.pStoneSlabItemGetIcon,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabItemGetIcon),
+                          reinterpret_cast<void**>(&GameHooks::Original_StoneSlabItemGetIcon)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook StoneSlabTileItem::getIcon");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked StoneSlabTileItem::getIcon (custom slabs)");
+        }
+    }
+
     if (symbols.pPlayerCanDestroy)
     {
         if (MH_CreateHook(symbols.pPlayerCanDestroy,
@@ -336,6 +605,14 @@ bool HookManager::Install(const SymbolResolver& symbols)
 
     GameHooks::SetAtlasLocationPointers(symbols.pTextureAtlasLocationBlocks, symbols.pTextureAtlasLocationItems);
     GameHooks::SetTileTilesArray(symbols.pTileTiles);
+    GameHooks::SetBlockHelperSymbols(symbols.pTileGetTextureFaceData);
+    GameHooks::SetManagedBlockDispatchSymbols(symbols.pLevelGetTile);
+    NativeExports::SetLevelInteropSymbols(
+        symbols.pLevelHasNeighborSignal,
+        symbols.pLevelSetTileAndData,
+        symbols.pServerLevelAddToTickNextTick ? symbols.pServerLevelAddToTickNextTick
+                                              : symbols.pLevelAddToTickNextTick,
+        symbols.pLevelGetTile);
 
     if (symbols.pTexturesBindTextureResource)
     {

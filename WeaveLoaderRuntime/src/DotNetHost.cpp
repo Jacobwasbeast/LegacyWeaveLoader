@@ -24,6 +24,9 @@ static managed_entry_fn fn_Tick = nullptr;
 static managed_entry_fn fn_Shutdown = nullptr;
 static managed_entry_fn fn_ItemMineBlock = nullptr;
 static managed_entry_fn fn_ItemUse = nullptr;
+static managed_entry_fn fn_BlockOnPlace = nullptr;
+static managed_entry_fn fn_BlockNeighborChanged = nullptr;
+static managed_entry_fn fn_BlockTick = nullptr;
 static managed_entry_fn fn_EntitySummoned = nullptr;
 
 static bool LoadHostfxr()
@@ -182,6 +185,9 @@ bool DotNetHost::Initialize()
     ok &= resolve(L"Shutdown", &fn_Shutdown);
     ok &= resolve(L"OnItemMineBlock", &fn_ItemMineBlock);
     ok &= resolve(L"OnItemUse", &fn_ItemUse);
+    ok &= resolve(L"OnBlockPlace", &fn_BlockOnPlace);
+    ok &= resolve(L"OnBlockNeighborChanged", &fn_BlockNeighborChanged);
+    ok &= resolve(L"OnBlockTick", &fn_BlockTick);
     ok &= resolve(L"OnEntitySummoned", &fn_EntitySummoned);
 
     if (!ok)
@@ -245,6 +251,27 @@ int DotNetHost::CallItemUse(const void* args, int sizeBytes)
     if (!fn_ItemUse || !args || sizeBytes <= 0)
         return 0;
     return fn_ItemUse(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockOnPlace(const void* args, int sizeBytes)
+{
+    if (!fn_BlockOnPlace || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockOnPlace(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockNeighborChanged(const void* args, int sizeBytes)
+{
+    if (!fn_BlockNeighborChanged || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockNeighborChanged(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockTick(const void* args, int sizeBytes)
+{
+    if (!fn_BlockTick || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockTick(const_cast<void*>(args), sizeBytes);
 }
 
 void DotNetHost::CallEntitySummoned(int entityNumericId, float x, float y, float z)

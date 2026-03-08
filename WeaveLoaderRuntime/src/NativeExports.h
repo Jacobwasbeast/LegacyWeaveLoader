@@ -1,5 +1,10 @@
 #pragma once
 
+namespace NativeExports
+{
+    void SetLevelInteropSymbols(void* hasNeighborSignal, void* setTileAndData, void* addToTickNextTick, void* getTile);
+}
+
 /// Exported C functions callable from C# via P/Invoke.
 /// All registration functions accept namespaced string IDs and delegate
 /// to IdRegistry for numeric ID allocation.
@@ -16,7 +21,48 @@ extern "C"
         int lightBlock,
         const char* displayName,
         int requiredHarvestLevel,
-        int requiredTool);
+        int requiredTool,
+        int acceptsRedstonePower);
+    __declspec(dllexport) int native_register_managed_block(
+        const char* namespacedId,
+        int materialId,
+        float hardness,
+        float resistance,
+        int soundType,
+        const char* iconName,
+        float lightEmission,
+        int lightBlock,
+        const char* displayName,
+        int requiredHarvestLevel,
+        int requiredTool,
+        int acceptsRedstonePower);
+    __declspec(dllexport) int native_register_falling_block(
+        const char* namespacedId,
+        int materialId,
+        float hardness,
+        float resistance,
+        int soundType,
+        const char* iconName,
+        float lightEmission,
+        int lightBlock,
+        const char* displayName,
+        int requiredHarvestLevel,
+        int requiredTool,
+        int acceptsRedstonePower);
+    __declspec(dllexport) int native_register_slab_block(
+        const char* namespacedId,
+        int materialId,
+        float hardness,
+        float resistance,
+        int soundType,
+        const char* iconName,
+        float lightEmission,
+        int lightBlock,
+        const char* displayName,
+        int requiredHarvestLevel,
+        int requiredTool,
+        int acceptsRedstonePower,
+        int* outDoubleBlockNumericId);
 
     __declspec(dllexport) int native_register_item(
         const char* namespacedId,
@@ -60,6 +106,10 @@ extern "C"
         int numericItemId,
         int harvestLevel,
         float destroySpeed);
+    __declspec(dllexport) void native_configure_managed_block(
+        int numericBlockId,
+        int dropNumericBlockId,
+        int cloneNumericBlockId);
     __declspec(dllexport) int native_configure_custom_tool_item(
         int numericItemId,
         int toolKind,
@@ -99,6 +149,10 @@ extern "C"
     __declspec(dllexport) int native_spawn_entity_from_player_look(void* playerPtr, void* playerSharedPtr, int numericEntityId, double speed, double spawnForward, double spawnUp);
     __declspec(dllexport) int native_summon_entity(const char* namespacedId, double x, double y, double z);
     __declspec(dllexport) int native_summon_entity_by_id(int numericEntityId, double x, double y, double z);
+    __declspec(dllexport) int native_level_has_neighbor_signal(void* levelPtr, int x, int y, int z);
+    __declspec(dllexport) int native_level_set_tile(void* levelPtr, int x, int y, int z, int blockId, int data, int flags);
+    __declspec(dllexport) int native_level_schedule_tick(void* levelPtr, int x, int y, int z, int blockId, int delay);
+    __declspec(dllexport) int native_level_get_tile(void* levelPtr, int x, int y, int z);
 
     __declspec(dllexport) void native_subscribe_event(
         const char* eventName,
