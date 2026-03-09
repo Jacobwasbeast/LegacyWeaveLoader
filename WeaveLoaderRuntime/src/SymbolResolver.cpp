@@ -263,6 +263,7 @@ bool SymbolResolver::ResolveGameFunctions()
     pLevelChunkSetTile = ResolveExactProcName(m_moduleBase, "LevelChunk::setTile");
     pLevelChunkGetPos = ResolveExactProcName(m_moduleBase, "LevelChunk::getPos");
     pLevelChunkGetHighestNonEmptyY = ResolveExactProcName(m_moduleBase, "LevelChunk::getHighestNonEmptyY");
+    pCompressedTileStorageSet = ResolveExactProcName(m_moduleBase, "CompressedTileStorage::set");
 
     // Some public symbols in this build resolve to stub bodies. Prefer exact
     // module procedure names from the PDB where those exist.
@@ -380,6 +381,7 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("LevelChunk::setTile", pLevelChunkSetTile);
     logSym("LevelChunk::getPos", pLevelChunkGetPos);
     logSym("LevelChunk::getHighestNonEmptyY", pLevelChunkGetHighestNonEmptyY);
+    logSym("CompressedTileStorage::set", pCompressedTileStorageSet);
 
     bool ok = pRunStaticCtors && pMinecraftTick && pMinecraftInit;
     if (ok)

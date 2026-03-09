@@ -16,6 +16,8 @@
 #include "PDB_CoalescedMSFStream.h"
 #include "PDB_ModuleInfoStream.h"
 #include "PDB_ModuleSymbolStream.h"
+#include "PDB_Util.h"
+#include "Foundation/PDB_BitUtil.h"
 
 struct SymEntry
 {
@@ -188,7 +190,15 @@ static uint32_t ResolveProcRefRVA(uint16_t moduleIndex, uint32_t symbolOffset)
         const PDB::ModuleSymbolStream modSymStream = mod.CreateSymbolStream(*s_rawFile);
         for (uint32_t candidateOffset : candidateOffsets)
         {
-            const PDB::CodeView::DBI::Record* target = modSymStream.GetRecordAtOffset(candidateOffset);
+            const PDB::CodeView::DBI::Record* target = nullptr;
+            size_t currentOffset = sizeof(uint32_t);
+            modSymStream.ForEachSymbol([&](const PDB::CodeView::DBI::Record* record) {
+                if (target == nullptr && currentOffset == static_cast<size_t>(candidateOffset))
+                    target = record;
+                const uint32_t recordSize = PDB::GetCodeViewRecordSize(record);
+                currentOffset = PDB::BitUtil::RoundUpToMultiple<size_t>(
+                    currentOffset + sizeof(PDB::CodeView::DBI::RecordHeader) + recordSize, 4u);
+            });
             const uint32_t rva = ResolveProcRecordRVA(target, s_sectionStream);
             if (rva != 0)
                 return rva;

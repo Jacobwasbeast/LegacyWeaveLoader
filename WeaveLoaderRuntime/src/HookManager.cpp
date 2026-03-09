@@ -21,11 +21,13 @@ bool HookManager::Install(const SymbolResolver& symbols)
     }
 
     WorldIdRemap::SetTagNewTagSymbol(symbols.pTagNewTag);
+    WorldIdRemap::SetTileArraySymbol(symbols.pTileTiles);
     WorldIdRemap::SetLevelChunkTileSymbols(
         symbols.pLevelChunkGetTile,
         symbols.pLevelChunkSetTile,
         symbols.pLevelChunkGetPos,
         symbols.pLevelChunkGetHighestNonEmptyY);
+    WorldIdRemap::SetCompressedTileStorageSetSymbol(symbols.pCompressedTileStorageSet);
 
     if (symbols.pRunStaticCtors)
     {

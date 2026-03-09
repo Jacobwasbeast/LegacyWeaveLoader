@@ -5,7 +5,9 @@
 namespace WorldIdRemap
 {
     void SetTagNewTagSymbol(void* fnPtr);
+    void SetTileArraySymbol(void* tileArrayPtr);
     void SetLevelChunkTileSymbols(void* getTileFn, void* setTileFn, void* getPosFn, void* getHighestNonEmptyYFn);
+    void SetCompressedTileStorageSetSymbol(void* setFn);
     void EnsureMissingPlaceholders();
     int RemapChunkBlockIds(void* chunkStoragePtr, void* levelChunkPtr, int chunkX, int chunkZ);
     void SaveChunkBlockNamespaces(void* chunkStoragePtr, void* levelChunkPtr);

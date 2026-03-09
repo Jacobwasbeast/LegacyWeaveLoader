@@ -100,6 +100,7 @@ public:
     void* pLevelChunkSetTile = nullptr;          // LevelChunk::setTile(int,int,int,int)
     void* pLevelChunkGetPos = nullptr;           // LevelChunk::getPos()
     void* pLevelChunkGetHighestNonEmptyY = nullptr; // LevelChunk::getHighestNonEmptyY()
+    void* pCompressedTileStorageSet = nullptr;        // CompressedTileStorage::set(int,int,int,int)
 
 private:
     uintptr_t m_moduleBase = 0;
