@@ -21,6 +21,11 @@ bool HookManager::Install(const SymbolResolver& symbols)
     }
 
     WorldIdRemap::SetTagNewTagSymbol(symbols.pTagNewTag);
+    WorldIdRemap::SetLevelChunkTileSymbols(
+        symbols.pLevelChunkGetTile,
+        symbols.pLevelChunkSetTile,
+        symbols.pLevelChunkGetPos,
+        symbols.pLevelChunkGetHighestNonEmptyY);
 
     if (symbols.pRunStaticCtors)
     {
@@ -377,6 +382,34 @@ bool HookManager::Install(const SymbolResolver& symbols)
         else
         {
             LogUtil::Log("[WeaveLoader] Hooked ServerLevel::tickPendingTicks (managed block callbacks)");
+        }
+    }
+
+    if (symbols.pMcRegionChunkStorageLoad)
+    {
+        if (MH_CreateHook(symbols.pMcRegionChunkStorageLoad,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_McRegionChunkStorageLoad),
+                          reinterpret_cast<void**>(&GameHooks::Original_McRegionChunkStorageLoad)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook McRegionChunkStorage::load");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked McRegionChunkStorage::load (block id remap)");
+        }
+    }
+
+    if (symbols.pMcRegionChunkStorageSave)
+    {
+        if (MH_CreateHook(symbols.pMcRegionChunkStorageSave,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_McRegionChunkStorageSave),
+                          reinterpret_cast<void**>(&GameHooks::Original_McRegionChunkStorageSave)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook McRegionChunkStorage::save");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked McRegionChunkStorage::save (block namespace persistence)");
         }
     }
 

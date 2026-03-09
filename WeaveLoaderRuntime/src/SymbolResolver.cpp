@@ -44,6 +44,8 @@ static const char* SYM_LEVEL_UPDATE_NEIGHBORS_AT = "?updateNeighborsAt@Level@@QE
 static const char* SYM_SERVERLEVEL_TICKPENDINGTICKS = "?tickPendingTicks@ServerLevel@@UEAA_N_N@Z";
 static const char* SYM_LEVEL_GETTILE = "?getTile@Level@@UEAAHHHH@Z";
 static const char* SYM_LEVEL_SETDATA = "?setData@Level@@UEAA_NHHHHH_N@Z";
+static const char* SYM_MCREGIONCHUNKSTORAGE_LOAD = "?load@McRegionChunkStorage@@UEAAPEAVLevelChunk@@PEAVLevel@@HH@Z";
+static const char* SYM_MCREGIONCHUNKSTORAGE_SAVE = "?save@McRegionChunkStorage@@UEAAXPEAVLevel@@PEAVLevelChunk@@@Z";
 static const char* SYM_TILE_GETRESOURCE = "?getResource@Tile@@UEAAHHPEAVRandom@@H@Z";
 static const char* SYM_TILE_CLONETILEID = "?cloneTileId@Tile@@UEAAHPEAVLevel@@HHH@Z";
 static const char* SYM_TILE_GETTEXTURE_FACEDATA = "?getTexture@Tile@@UEAAPEAVIcon@@HH@Z";
@@ -202,6 +204,12 @@ bool SymbolResolver::ResolveGameFunctions()
     pServerLevelTickPendingTicks = Resolve(SYM_SERVERLEVEL_TICKPENDINGTICKS);
     pLevelGetTile = Resolve(SYM_LEVEL_GETTILE);
     pLevelSetData = Resolve(SYM_LEVEL_SETDATA);
+    pMcRegionChunkStorageLoad = Resolve(SYM_MCREGIONCHUNKSTORAGE_LOAD);
+    if (!pMcRegionChunkStorageLoad)
+        pMcRegionChunkStorageLoad = ResolveExactProcName(m_moduleBase, "McRegionChunkStorage::load");
+    pMcRegionChunkStorageSave = Resolve(SYM_MCREGIONCHUNKSTORAGE_SAVE);
+    if (!pMcRegionChunkStorageSave)
+        pMcRegionChunkStorageSave = ResolveExactProcName(m_moduleBase, "McRegionChunkStorage::save");
     pTileGetResource = Resolve(SYM_TILE_GETRESOURCE);
     pTileCloneTileId = Resolve(SYM_TILE_CLONETILEID);
     pTileGetTextureFaceData = Resolve(SYM_TILE_GETTEXTURE_FACEDATA);
@@ -251,6 +259,10 @@ bool SymbolResolver::ResolveGameFunctions()
     pLevelSetTileAndData = Resolve(SYM_LEVEL_SETTILEANDDATA);
     pLevelAddToTickNextTick = Resolve(SYM_LEVEL_ADDTOTICKNEXTTICK);
     pServerLevelAddToTickNextTick = Resolve(SYM_SERVERLEVEL_ADDTOTICKNEXTTICK);
+    pLevelChunkGetTile = ResolveExactProcName(m_moduleBase, "LevelChunk::getTile");
+    pLevelChunkSetTile = ResolveExactProcName(m_moduleBase, "LevelChunk::setTile");
+    pLevelChunkGetPos = ResolveExactProcName(m_moduleBase, "LevelChunk::getPos");
+    pLevelChunkGetHighestNonEmptyY = ResolveExactProcName(m_moduleBase, "LevelChunk::getHighestNonEmptyY");
 
     // Some public symbols in this build resolve to stub bodies. Prefer exact
     // module procedure names from the PDB where those exist.
@@ -317,6 +329,8 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("ServerLevel::tickPendingTicks", pServerLevelTickPendingTicks);
     logSym("Level::getTile", pLevelGetTile);
     logSym("Level::setData", pLevelSetData);
+    logSym("McRegionChunkStorage::load", pMcRegionChunkStorageLoad);
+    logSym("McRegionChunkStorage::save", pMcRegionChunkStorageSave);
     logSym("Tile::getResource", pTileGetResource);
     logSym("Tile::cloneTileId", pTileCloneTileId);
     logSym("Tile::getTexture(face,data)", pTileGetTextureFaceData);
@@ -362,6 +376,10 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("Level::setTileAndData", pLevelSetTileAndData);
     logSym("Level::addToTickNextTick", pLevelAddToTickNextTick);
     logSym("ServerLevel::addToTickNextTick", pServerLevelAddToTickNextTick);
+    logSym("LevelChunk::getTile", pLevelChunkGetTile);
+    logSym("LevelChunk::setTile", pLevelChunkSetTile);
+    logSym("LevelChunk::getPos", pLevelChunkGetPos);
+    logSym("LevelChunk::getHighestNonEmptyY", pLevelChunkGetHighestNonEmptyY);
 
     bool ok = pRunStaticCtors && pMinecraftTick && pMinecraftInit;
     if (ok)

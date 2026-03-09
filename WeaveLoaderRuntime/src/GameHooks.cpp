@@ -60,6 +60,8 @@ namespace GameHooks
     LevelUpdateNeighborsAtDispatch_fn Original_LevelUpdateNeighborsAt = nullptr;
     ServerLevelTickPendingTicks_fn Original_ServerLevelTickPendingTicks = nullptr;
     TileGetResource_fn Original_TileGetResource = nullptr;
+    McRegionChunkStorageLoad_fn Original_McRegionChunkStorageLoad = nullptr;
+    McRegionChunkStorageSave_fn Original_McRegionChunkStorageSave = nullptr;
     TileCloneTileId_fn Original_TileCloneTileId = nullptr;
     TileGetTextureFaceData_fn Original_StoneSlabGetTexture = nullptr;
     TileGetTextureFaceData_fn Original_WoodSlabGetTexture = nullptr;
@@ -1165,6 +1167,31 @@ namespace GameHooks
         }
 
         return originalResult || anyPending;
+    }
+
+    void* __fastcall Hooked_McRegionChunkStorageLoad(void* thisPtr, void* level, int x, int z)
+    {
+        static int s_chunkLoadLogCount = 0;
+        void* levelChunk = Original_McRegionChunkStorageLoad
+            ? Original_McRegionChunkStorageLoad(thisPtr, level, x, z)
+            : nullptr;
+        if (levelChunk)
+        {
+            const int remapped = WorldIdRemap::RemapChunkBlockIds(thisPtr, levelChunk, x, z);
+            if (s_chunkLoadLogCount < 64)
+            {
+                ++s_chunkLoadLogCount;
+                LogUtil::Log("[WeaveLoader] WorldIdRemap chunk load: x=%d z=%d remapped=%d", x, z, remapped);
+            }
+        }
+        return levelChunk;
+    }
+
+    void __fastcall Hooked_McRegionChunkStorageSave(void* thisPtr, void* level, void* levelChunk)
+    {
+        WorldIdRemap::SaveChunkBlockNamespaces(thisPtr, levelChunk);
+        if (Original_McRegionChunkStorageSave)
+            Original_McRegionChunkStorageSave(thisPtr, level, levelChunk);
     }
 
     int __fastcall Hooked_TileGetResource(void* thisPtr, int data, void* random, int playerBonusLevel)

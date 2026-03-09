@@ -49,6 +49,8 @@ public:
     void* pServerLevelTickPendingTicks = nullptr; // ServerLevel::tickPendingTicks(bool)
     void* pLevelGetTile = nullptr;               // Level::getTile(int,int,int)
     void* pLevelSetData = nullptr;               // Level::setData(int,int,int,int,int,bool)
+    void* pMcRegionChunkStorageLoad = nullptr;   // McRegionChunkStorage::load(Level*,int,int)
+    void* pMcRegionChunkStorageSave = nullptr;   // McRegionChunkStorage::save(Level*,LevelChunk*)
     void* pTileGetResource = nullptr;            // Tile::getResource(int,Random*,int)
     void* pTileCloneTileId = nullptr;            // Tile::cloneTileId(Level*,int,int,int)
     void* pTileGetTextureFaceData = nullptr;     // Tile::getTexture(int,int)
@@ -94,6 +96,10 @@ public:
     void* pLevelSetTileAndData = nullptr;        // Level::setTileAndData(int,int,int,int,int,int)
     void* pLevelAddToTickNextTick = nullptr;     // Level::addToTickNextTick(int,int,int,int,int)
     void* pServerLevelAddToTickNextTick = nullptr; // ServerLevel::addToTickNextTick(int,int,int,int,int)
+    void* pLevelChunkGetTile = nullptr;          // LevelChunk::getTile(int,int,int)
+    void* pLevelChunkSetTile = nullptr;          // LevelChunk::setTile(int,int,int,int)
+    void* pLevelChunkGetPos = nullptr;           // LevelChunk::getPos()
+    void* pLevelChunkGetHighestNonEmptyY = nullptr; // LevelChunk::getHighestNonEmptyY()
 
 private:
     uintptr_t m_moduleBase = 0;
