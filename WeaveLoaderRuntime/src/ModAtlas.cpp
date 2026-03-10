@@ -240,6 +240,111 @@ namespace ModAtlas
         return ok != 0 && !outBytes.empty();
     }
 
+    struct MipLevel
+    {
+        int w = 0;
+        int h = 0;
+        std::vector<unsigned char> rgba;
+    };
+
+    static void Downsample2x(const unsigned char* src, int srcW, int srcH,
+                             std::vector<unsigned char>& out, int& outW, int& outH)
+    {
+        outW = (srcW > 1) ? (srcW / 2) : 1;
+        outH = (srcH > 1) ? (srcH / 2) : 1;
+        out.assign(static_cast<size_t>(outW) * static_cast<size_t>(outH) * 4, 0);
+
+        for (int y = 0; y < outH; y++)
+        {
+            int sy = y * 2;
+            for (int x = 0; x < outW; x++)
+            {
+                int sx = x * 2;
+                int sx1 = (sx + 1 < srcW) ? (sx + 1) : (srcW - 1);
+                int sy1 = (sy + 1 < srcH) ? (sy + 1) : (srcH - 1);
+
+                const unsigned char* p00 = src + (sy * srcW + sx) * 4;
+                const unsigned char* p10 = src + (sy * srcW + sx1) * 4;
+                const unsigned char* p01 = src + (sy1 * srcW + sx) * 4;
+                const unsigned char* p11 = src + (sy1 * srcW + sx1) * 4;
+
+                unsigned int r = p00[0] + p10[0] + p01[0] + p11[0];
+                unsigned int g = p00[1] + p10[1] + p01[1] + p11[1];
+                unsigned int b = p00[2] + p10[2] + p01[2] + p11[2];
+                unsigned int a = p00[3] + p10[3] + p01[3] + p11[3];
+
+                unsigned char* dst = out.data() + (y * outW + x) * 4;
+                dst[0] = static_cast<unsigned char>(r / 4);
+                dst[1] = static_cast<unsigned char>(g / 4);
+                dst[2] = static_cast<unsigned char>(b / 4);
+                dst[3] = static_cast<unsigned char>(a / 4);
+            }
+        }
+    }
+
+    static void BuildMipChain(const unsigned char* base, int baseW, int baseH,
+                              std::vector<MipLevel>& outLevels)
+    {
+        outLevels.clear();
+        if (!base || baseW <= 0 || baseH <= 0)
+            return;
+
+        std::vector<unsigned char> current(base, base + (static_cast<size_t>(baseW) * baseH * 4));
+        int curW = baseW;
+        int curH = baseH;
+
+        for (int level = 1; level < 10; level++)
+        {
+            if (curW == 1 && curH == 1)
+                break;
+
+            MipLevel mip;
+            Downsample2x(current.data(), curW, curH, mip.rgba, mip.w, mip.h);
+            outLevels.push_back(mip);
+            current = mip.rgba;
+            curW = mip.w;
+            curH = mip.h;
+        }
+    }
+
+    static void ApplyMipChainToBufferedImage(int** data, const std::vector<MipLevel>& levels)
+    {
+        if (!data)
+            return;
+
+        size_t count = (levels.size() > 9) ? 9 : levels.size();
+        for (size_t i = 0; i < count; i++)
+        {
+            const MipLevel& mip = levels[i];
+            if (mip.w <= 0 || mip.h <= 0 || mip.rgba.empty())
+                continue;
+
+            int pixelCount = mip.w * mip.h;
+            int* buf = new int[pixelCount];
+            for (int p = 0; p < pixelCount; p++)
+            {
+                const unsigned char* px = &mip.rgba[p * 4];
+                buf[p] = (static_cast<int>(px[3]) << 24) |
+                         (static_cast<int>(px[0]) << 16) |
+                         (static_cast<int>(px[1]) << 8) |
+                         (static_cast<int>(px[2]) << 0);
+            }
+
+            if (data[i + 1])
+                delete[] data[i + 1];
+            data[i + 1] = buf;
+        }
+
+        for (size_t i = count + 1; i < 10; i++)
+        {
+            if (data[i])
+            {
+                delete[] data[i];
+                data[i] = nullptr;
+            }
+        }
+    }
+
     static bool FileExists(const std::string& path)
     {
         DWORD attr = GetFileAttributesA(path.c_str());
@@ -250,6 +355,12 @@ namespace ModAtlas
     {
         if (page <= 0) return baseDir + "\\" + stem + ".png";
         return baseDir + "\\" + stem + "_p" + std::to_string(page) + ".png";
+    }
+
+    static std::string BuildMipOutputPath(const std::string& baseDir, const char* stem, int level)
+    {
+        if (level <= 1) return baseDir + "\\" + stem + ".png";
+        return baseDir + "\\" + stem + "MipMapLevel" + std::to_string(level) + ".png";
     }
 
     static std::string BuildVirtualPageOutputPath(const std::string& baseDir, const char* stem, int page)
@@ -522,6 +633,47 @@ namespace ModAtlas
         return consumed;
     }
 
+    static void WriteMipChainToDisk(const std::string& baseDir, const char* stem,
+                                    const std::vector<MipLevel>& levels)
+    {
+        for (size_t i = 0; i < levels.size() && i < 9; i++)
+        {
+            const MipLevel& mip = levels[i];
+            if (mip.w <= 0 || mip.h <= 0 || mip.rgba.empty())
+                continue;
+
+            std::vector<unsigned char> pngBytes;
+            if (!SavePngToBytes(mip.rgba.data(), mip.w, mip.h, pngBytes))
+                continue;
+
+            int mipLevel = static_cast<int>(i) + 2;
+            std::string outPath = BuildMipOutputPath(baseDir, stem, mipLevel);
+            std::ofstream out(outPath, std::ios::binary);
+            if (out.is_open())
+                out.write(reinterpret_cast<const char*>(pngBytes.data()),
+                          static_cast<std::streamsize>(pngBytes.size()));
+        }
+    }
+
+    static void GenerateMipmapsForAtlas(const std::string& basePath,
+                                        const std::string& outDir,
+                                        const char* stem)
+    {
+        if (basePath.empty() || outDir.empty())
+            return;
+
+        int w = 0, h = 0, c = 0;
+        unsigned char* base = stbi_load(basePath.c_str(), &w, &h, &c, 4);
+        if (!base)
+            return;
+
+        std::vector<MipLevel> levels;
+        BuildMipChain(base, w, h, levels);
+        stbi_image_free(base);
+
+        WriteMipChainToDisk(outDir, stem, levels);
+    }
+
     static std::string BuildAtlasesInternal(const std::string& modsPath,
                                             const std::string& terrainBasePath,
                                             const std::string& itemsBasePath)
@@ -597,6 +749,8 @@ namespace ModAtlas
                     if (!vpath.empty())
                         CopyFileA(outPath.c_str(), vpath.c_str(), FALSE);
                 }
+
+                GenerateMipmapsForAtlas(outPath, s_mergedDir, "terrain");
             }
 
             if (placed < blockPaths.size())
@@ -899,6 +1053,13 @@ namespace ModAtlas
             *reinterpret_cast<int*>(base + 0x50) = outW;
             *reinterpret_cast<int*>(base + 0x54) = outH;
         }
+
+        if (atlasType == 0)
+        {
+            std::vector<MipLevel> levels;
+            BuildMipChain(mergedRgba.data(), outW, outH, levels);
+            ApplyMipChainToBufferedImage(data, levels);
+        }
         return true;
     }
 
@@ -1030,6 +1191,17 @@ namespace ModAtlas
         return BuildPageOutputPath(s_mergedDir, "items", page);
     }
 
+    std::string GetMergedMipmapPath(int atlasType, int mipLevel)
+    {
+        if (s_mergedDir.empty() || mipLevel <= 1)
+            return "";
+        const char* stem = (atlasType == 0) ? "terrain" : "items";
+        std::string path = BuildMipOutputPath(s_mergedDir, stem, mipLevel);
+        if (!FileExists(path))
+            return "";
+        return path;
+    }
+
     std::string GetVirtualPagePath(int atlasType, int page)
     {
         if (s_virtualAtlasDir.empty() || page < 0) return "";
@@ -1110,6 +1282,44 @@ namespace ModAtlas
                (lower.find(L"/modloader/") != std::wstring::npos);
     }
 
+    static bool TryExtractMipmapLevel(const wchar_t* path, const wchar_t* stem, int& outLevel)
+    {
+        outLevel = 0;
+        if (!path || !stem) return false;
+
+        std::wstring lower;
+        lower.reserve(wcslen(path));
+        for (const wchar_t* p = path; *p; ++p)
+        {
+            wchar_t c = (*p == L'\\') ? L'/' : *p;
+            lower.push_back((wchar_t)towlower(c));
+        }
+
+        std::wstring key = std::wstring(stem) + L"mipmaplevel";
+        size_t pos = lower.rfind(key);
+        if (pos == std::wstring::npos)
+            return false;
+
+        size_t numStart = pos + key.size();
+        size_t numEnd = lower.find(L".png", numStart);
+        if (numEnd == std::wstring::npos || numEnd <= numStart)
+            return false;
+
+        int value = 0;
+        for (size_t i = numStart; i < numEnd; i++)
+        {
+            wchar_t ch = lower[i];
+            if (ch < L'0' || ch > L'9')
+                return false;
+            value = value * 10 + (ch - L'0');
+        }
+
+        if (value <= 1)
+            return false;
+        outLevel = value;
+        return true;
+    }
+
     static HANDLE WINAPI Hooked_CreateFileW(
         LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
         LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
@@ -1122,6 +1332,27 @@ namespace ModAtlas
         }
         if (lpFileName && s_hasModTextures && !IsGeneratedAtlasPath(lpFileName))
         {
+            int mipLevel = 0;
+            if (TryExtractMipmapLevel(lpFileName, L"terrain", mipLevel))
+            {
+                std::string mipPath = GetMergedMipmapPath(0, mipLevel);
+                if (!mipPath.empty())
+                {
+                    std::wstring wmip(mipPath.begin(), mipPath.end());
+                    return s_originalCreateFileW(wmip.c_str(), dwDesiredAccess, dwShareMode,
+                        lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+                }
+            }
+            if (TryExtractMipmapLevel(lpFileName, L"items", mipLevel))
+            {
+                std::string mipPath = GetMergedMipmapPath(1, mipLevel);
+                if (!mipPath.empty())
+                {
+                    std::wstring wmip(mipPath.begin(), mipPath.end());
+                    return s_originalCreateFileW(wmip.c_str(), dwDesiredAccess, dwShareMode,
+                        lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+                }
+            }
             if (!s_mergedTerrainW.empty() && EndsWith(lpFileName, L"\\terrain.png"))
             {
                 LogUtil::Log("[WeaveLoader] CreateFileW: redirecting terrain.png to merged atlas");

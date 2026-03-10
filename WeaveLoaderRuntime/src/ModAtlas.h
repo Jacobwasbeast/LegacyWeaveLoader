@@ -47,6 +47,7 @@ namespace ModAtlas
     std::string GetMergedItemsPath();
     std::string GetMergedPagePath(int atlasType, int page);
     std::string GetVirtualPagePath(int atlasType, int page);
+    std::string GetMergedMipmapPath(int atlasType, int mipLevel);
     std::string GetMergedTerrainPage1Path();
     std::string GetMergedItemsPage1Path();
 

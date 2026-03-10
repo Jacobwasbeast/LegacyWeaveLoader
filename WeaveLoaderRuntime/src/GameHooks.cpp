@@ -341,6 +341,35 @@ namespace GameHooks
         return path.compare(pathLen - suffLen, suffLen, suffix) == 0;
     }
 
+    static bool TryParseMipmapLevel(const std::wstring& lowerPath, const wchar_t* stem, int& outLevel)
+    {
+        outLevel = 0;
+        if (!stem) return false;
+        std::wstring key = std::wstring(stem) + L"mipmaplevel";
+        size_t pos = lowerPath.rfind(key);
+        if (pos == std::wstring::npos)
+            return false;
+
+        size_t numStart = pos + key.size();
+        size_t numEnd = lowerPath.find(L".png", numStart);
+        if (numEnd == std::wstring::npos || numEnd <= numStart)
+            return false;
+
+        int value = 0;
+        for (size_t i = numStart; i < numEnd; i++)
+        {
+            wchar_t ch = lowerPath[i];
+            if (ch < L'0' || ch > L'9')
+                return false;
+            value = value * 10 + (ch - L'0');
+        }
+
+        if (value <= 1)
+            return false;
+        outLevel = value;
+        return true;
+    }
+
     static std::string ToLowerAscii(const std::string& value)
     {
         std::string out;
@@ -2408,6 +2437,26 @@ namespace GameHooks
 
         if (!isGenerated)
         {
+            int mipLevel = 0;
+            if (TryParseMipmapLevel(lower, L"terrain", mipLevel))
+            {
+                std::string mipPath = ModAtlas::GetMergedMipmapPath(0, mipLevel);
+                if (!mipPath.empty())
+                {
+                    std::wstring ourPath(mipPath.begin(), mipPath.end());
+                    return Original_GetResourceAsStream(&ourPath);
+                }
+            }
+            if (TryParseMipmapLevel(lower, L"items", mipLevel))
+            {
+                std::string mipPath = ModAtlas::GetMergedMipmapPath(1, mipLevel);
+                if (!mipPath.empty())
+                {
+                    std::wstring ourPath(mipPath.begin(), mipPath.end());
+                    return Original_GetResourceAsStream(&ourPath);
+                }
+            }
+
             if (EndsWithPath(lower, L"terrain.png"))
             {
                 ModAtlas::SetOverrideAtlasPath(0, std::string(path->begin(), path->end()));
