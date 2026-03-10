@@ -1037,6 +1037,120 @@ bool FindNameByRVA(uint32_t rva, char* outName, size_t nameSize, uint32_t* outOf
     return true;
 }
 
+bool EnumerateSymbols(std::vector<SymbolInfo>& outSymbols)
+{
+    if (!s_open)
+        return false;
+
+    outSymbols.clear();
+
+    auto pushSymbol = [&](const char* name, uint32_t rva, bool isProc, uint8_t source)
+    {
+        if (!name || !name[0] || rva == 0)
+            return;
+        SymbolInfo info;
+        info.name = name;
+        info.rva = rva;
+        info.isProc = isProc;
+        info.source = source;
+        outSymbols.push_back(std::move(info));
+    };
+
+    // Public symbols
+    {
+        const PDB::ArrayView<PDB::HashRecord> records = s_publicStream->GetRecords();
+        for (const PDB::HashRecord& hashRecord : records)
+        {
+            const PDB::CodeView::DBI::Record* record = s_publicStream->GetRecord(*s_symbolRecords, hashRecord);
+            if (record->header.kind == PDB::CodeView::DBI::SymbolRecordKind::S_PUB32)
+            {
+                const uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(
+                    record->data.S_PUB32.section, record->data.S_PUB32.offset);
+                pushSymbol(record->data.S_PUB32.name, rva, true, 1);
+            }
+        }
+    }
+
+    // Global symbols
+    {
+        const PDB::ArrayView<PDB::HashRecord> records = s_globalStream->GetRecords();
+        for (const PDB::HashRecord& hashRecord : records)
+        {
+            const PDB::CodeView::DBI::Record* record = s_globalStream->GetRecord(*s_symbolRecords, hashRecord);
+            uint16_t section = 0;
+            uint32_t offset = 0;
+            const char* name = GetGlobalSymName(record, section, offset);
+            if (name)
+            {
+                const uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(section, offset);
+                pushSymbol(name, rva, false, 2);
+            }
+        }
+    }
+
+    // Global PROCREF/LPROCREF
+    {
+        const PDB::ArrayView<PDB::HashRecord> records = s_globalStream->GetRecords();
+        for (const PDB::HashRecord& hashRecord : records)
+        {
+            const PDB::CodeView::DBI::Record* record = s_globalStream->GetRecord(*s_symbolRecords, hashRecord);
+            uint16_t moduleIndex = 0;
+            uint32_t symbolOffset = 0;
+            const char* name = GetProcRefName(record, moduleIndex, symbolOffset);
+            if (!name)
+                continue;
+            const uint32_t rva = ResolveProcRefRVA(moduleIndex, symbolOffset);
+            if (rva != 0)
+                pushSymbol(name, rva, true, 3);
+        }
+    }
+
+    // Module symbols
+    {
+        const PDB::ArrayView<PDB::ModuleInfoStream::Module> modules = s_moduleStream->GetModules();
+        for (const PDB::ModuleInfoStream::Module& mod : modules)
+        {
+            if (!mod.HasSymbolStream())
+                continue;
+
+            const PDB::ModuleSymbolStream modSymStream = mod.CreateSymbolStream(*s_rawFile);
+            modSymStream.ForEachSymbol([&](const PDB::CodeView::DBI::Record* record)
+            {
+                const char* name = nullptr;
+                uint16_t section = 0;
+                uint32_t offset = 0;
+                bool isProc = false;
+
+                switch (record->header.kind)
+                {
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LPROC32:
+                    name = record->data.S_LPROC32.name; section = record->data.S_LPROC32.section; offset = record->data.S_LPROC32.offset; isProc = true; break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GPROC32:
+                    name = record->data.S_GPROC32.name; section = record->data.S_GPROC32.section; offset = record->data.S_GPROC32.offset; isProc = true; break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LPROC32_ID:
+                    name = record->data.S_LPROC32_ID.name; section = record->data.S_LPROC32_ID.section; offset = record->data.S_LPROC32_ID.offset; isProc = true; break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GPROC32_ID:
+                    name = record->data.S_GPROC32_ID.name; section = record->data.S_GPROC32_ID.section; offset = record->data.S_GPROC32_ID.offset; isProc = true; break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_LDATA32:
+                    name = record->data.S_LDATA32.name; section = record->data.S_LDATA32.section; offset = record->data.S_LDATA32.offset; break;
+                case PDB::CodeView::DBI::SymbolRecordKind::S_GDATA32:
+                    name = record->data.S_GDATA32.name; section = record->data.S_GDATA32.section; offset = record->data.S_GDATA32.offset; break;
+                default:
+                    return;
+                }
+
+                if (name)
+                {
+                    const uint32_t rva = s_sectionStream->ConvertSectionOffsetToRVA(section, offset);
+                    pushSymbol(name, rva, isProc, 4);
+                }
+            });
+        }
+    }
+
+    return true;
+}
+
 void Close()
 {
     delete s_moduleStream;   s_moduleStream  = nullptr;

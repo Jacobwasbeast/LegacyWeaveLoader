@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 
 namespace NativeExports
 {
@@ -14,6 +15,28 @@ namespace NativeExports
 /// to IdRegistry for numeric ID allocation.
 extern "C"
 {
+    enum NativeType : uint8_t
+    {
+        NativeType_I32 = 1,
+        NativeType_I64 = 2,
+        NativeType_F32 = 3,
+        NativeType_F64 = 4,
+        NativeType_Ptr = 5,
+        NativeType_Bool = 6
+    };
+
+    struct NativeArg
+    {
+        NativeType type;
+        uint64_t value;
+    };
+
+    struct NativeRet
+    {
+        NativeType type;
+        uint64_t value;
+    };
+
     __declspec(dllexport) int native_register_block(
         const char* namespacedId,
         int materialId,
@@ -170,4 +193,12 @@ extern "C"
         int count,
         int auxValue,
         int groupIndex);
+
+    __declspec(dllexport) void* native_find_symbol(const char* fullName);
+    __declspec(dllexport) int native_has_symbol(const char* fullName);
+    __declspec(dllexport) int native_get_signature_key(const char* fullName, char* outKey, int outLen);
+    __declspec(dllexport) int native_invoke(void* fn, void* thisPtr, int hasThis, const NativeArg* args, int argCount, NativeRet* outRet);
+
+    __declspec(dllexport) int native_mixin_add(const char* fullName, int at, void* managedCallback, int require);
+    __declspec(dllexport) int native_mixin_remove(const char* fullName, void* managedCallback);
 }

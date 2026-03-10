@@ -9,7 +9,8 @@ internal static class ModDiscovery
     internal record DiscoveredMod(
         IMod Instance,
         ModAttribute Metadata,
-        Assembly Assembly);
+        Assembly Assembly,
+        string Folder);
 
     internal static List<DiscoveredMod> DiscoverMods(string modsPath)
     {
@@ -27,7 +28,7 @@ internal static class ModDiscovery
         {
             var apiMod = new WeaveLoaderApiMod();
             var attr = typeof(WeaveLoaderApiMod).GetCustomAttribute<ModAttribute>()!;
-            mods.Add(new DiscoveredMod(apiMod, attr, typeof(ModDiscovery).Assembly));
+            mods.Add(new DiscoveredMod(apiMod, attr, typeof(ModDiscovery).Assembly, apiFolder));
             Logger.Info($"Discovered mod: {attr.Name} v{attr.Version} by {attr.Author} (mods/WeaveLoader.API/)");
         }
 
@@ -68,6 +69,7 @@ internal static class ModDiscovery
         var results = new List<DiscoveredMod>();
         var fileName = Path.GetFileName(dllPath);
         var fullPath = Path.GetFullPath(dllPath);
+        var folder = Path.GetDirectoryName(fullPath) ?? "";
 
         // Load into the SAME ALC that WeaveLoader.Core lives in (the hostfxr component context).
         // This ensures WeaveLoader.API types (IMod, ModAttribute, etc.) have the same identity.
@@ -76,7 +78,6 @@ internal static class ModDiscovery
         var assembly = coreContext.LoadFromAssemblyPath(fullPath);
 
         var allTypes = assembly.GetTypes();
-        Logger.Debug($"{fileName}: {allTypes.Length} type(s), checking for IMod implementations...");
 
         var modTypes = allTypes
             .Where(t => t.IsClass && !t.IsAbstract && typeof(IMod).IsAssignableFrom(t));
@@ -93,7 +94,7 @@ internal static class ModDiscovery
             try
             {
                 var instance = (IMod)Activator.CreateInstance(type)!;
-                results.Add(new DiscoveredMod(instance, attr, assembly));
+                results.Add(new DiscoveredMod(instance, attr, assembly, folder));
 
                 string name = string.IsNullOrEmpty(attr.Name) ? attr.Id : attr.Name;
                 Logger.Info($"Discovered mod: {name} v{attr.Version} by {attr.Author} ({fileName})");
@@ -103,9 +104,6 @@ internal static class ModDiscovery
                 Logger.Error($"Failed to instantiate mod {type.FullName}: {ex.Message}");
             }
         }
-
-        if (results.Count == 0)
-            Logger.Debug($"No IMod implementations found in {fileName}");
 
         return results;
     }

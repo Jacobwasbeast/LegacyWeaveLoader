@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>WeaveLoader.Core</RootNamespace>
     <AssemblyName>WeaveLoader.Core</AssemblyName>
     <Description>WeaveLoader core runtime - mod discovery and lifecycle management</Description>

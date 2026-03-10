@@ -5,6 +5,7 @@
 #include "CrashHandler.h"
 #include "PdbParser.h"
 #include "SymbolResolver.h"
+#include "SymbolRegistry.h"
 #include "HookManager.h"
 #include "DotNetHost.h"
 #include "MainMenuOverlay.h"
@@ -31,6 +32,13 @@ DWORD WINAPI InitThread(LPVOID lpParam)
 
     std::string baseDir = GetDllDirectory(g_hModule);
     LogUtil::Log("[WeaveLoader] Runtime DLL directory: %s", baseDir.c_str());
+
+    std::string mappingPath = baseDir + "metadata\\mapping.json";
+    if (!SymbolRegistry::Instance().LoadFromFile(mappingPath.c_str()))
+    {
+        std::string fallbackPath = baseDir + "mapping.json";
+        SymbolRegistry::Instance().LoadFromFile(fallbackPath.c_str());
+    }
 
     char cwd[MAX_PATH] = {0};
     GetCurrentDirectoryA(MAX_PATH, cwd);

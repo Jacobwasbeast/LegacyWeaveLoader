@@ -1,8 +1,18 @@
 #pragma once
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace PdbParser
 {
+    struct SymbolInfo
+    {
+        uint32_t rva = 0;
+        std::string name;
+        bool isProc = false;
+        uint8_t source = 0;
+    };
+
     bool Open(const char* pdbPath);
 
     // Returns the RVA for a decorated symbol name, or 0 on failure.
@@ -29,5 +39,6 @@ namespace PdbParser
     // Returns true if found. outName receives the symbol name, outOffset
     // the byte distance from the symbol's start address.
     bool FindNameByRVA(uint32_t rva, char* outName, size_t nameSize, uint32_t* outOffset);
+    bool EnumerateSymbols(std::vector<SymbolInfo>& outSymbols);
     void Close();
 }

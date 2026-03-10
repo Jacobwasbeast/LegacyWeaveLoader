@@ -55,6 +55,7 @@ public static class WeaveLoaderCore
 
             var discovered = ModDiscovery.DiscoverMods(modsPath);
             _modManager?.AddMods(discovered);
+            MixinLoader.LoadMixins(discovered);
             Logger.Info($"Loaded {discovered.Count} mod(s)");
             return discovered.Count;
         }

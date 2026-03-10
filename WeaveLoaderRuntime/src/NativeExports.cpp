@@ -11,6 +11,8 @@
 #include "ManagedBlockRegistry.h"
 #include "ModStrings.h"
 #include "LogUtil.h"
+#include "SymbolRegistry.h"
+#include "HookRegistry.h"
 #include <Windows.h>
 #include <cstring>
 #include <string>
@@ -768,6 +770,111 @@ void native_subscribe_event(const char* eventName, void* managedFnPtr)
 void native_add_to_creative(int numericId, int count, int auxValue, int groupIndex)
 {
     CreativeInventory::AddPending(numericId, count, auxValue, groupIndex);
+}
+
+void* native_find_symbol(const char* fullName)
+{
+    return SymbolRegistry::Instance().FindAddress(fullName);
+}
+
+int native_has_symbol(const char* fullName)
+{
+    return SymbolRegistry::Instance().Has(fullName) ? 1 : 0;
+}
+
+int native_get_signature_key(const char* fullName, char* outKey, int outLen)
+{
+    if (!outKey || outLen <= 0)
+        return 0;
+    const char* key = SymbolRegistry::Instance().FindSignatureKey(fullName);
+    if (!key || !key[0])
+        return 0;
+    const size_t len = strlen(key);
+    const size_t copyLen = (len < static_cast<size_t>(outLen - 1)) ? len : static_cast<size_t>(outLen - 1);
+    memcpy(outKey, key, copyLen);
+    outKey[copyLen] = '\0';
+    return static_cast<int>(copyLen);
+}
+
+int native_invoke(void* fn, void* thisPtr, int hasThis, const NativeArg* args, int argCount, NativeRet* outRet)
+{
+    if (!fn || argCount < 0)
+        return 0;
+
+    for (int i = 0; i < argCount; ++i)
+    {
+        switch (args[i].type)
+        {
+        case NativeType_I32:
+        case NativeType_I64:
+        case NativeType_Ptr:
+        case NativeType_Bool:
+            break;
+        default:
+            return 0;
+        }
+    }
+
+    uint64_t a[6] = {};
+    const int maxArgs = (argCount > 6) ? 6 : argCount;
+    for (int i = 0; i < maxArgs; ++i)
+        a[i] = args[i].value;
+
+    uint64_t ret = 0;
+    if (hasThis)
+    {
+        switch (argCount)
+        {
+        case 0: ret = reinterpret_cast<uint64_t(__fastcall *)(void*)>(fn)(thisPtr); break;
+        case 1: ret = reinterpret_cast<uint64_t(__fastcall *)(void*, uint64_t)>(fn)(thisPtr, a[0]); break;
+        case 2: ret = reinterpret_cast<uint64_t(__fastcall *)(void*, uint64_t, uint64_t)>(fn)(thisPtr, a[0], a[1]); break;
+        case 3: ret = reinterpret_cast<uint64_t(__fastcall *)(void*, uint64_t, uint64_t, uint64_t)>(fn)(thisPtr, a[0], a[1], a[2]); break;
+        case 4: ret = reinterpret_cast<uint64_t(__fastcall *)(void*, uint64_t, uint64_t, uint64_t, uint64_t)>(fn)(thisPtr, a[0], a[1], a[2], a[3]); break;
+        case 5: ret = reinterpret_cast<uint64_t(__fastcall *)(void*, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)>(fn)(thisPtr, a[0], a[1], a[2], a[3], a[4]); break;
+        default: ret = reinterpret_cast<uint64_t(__fastcall *)(void*, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)>(fn)(thisPtr, a[0], a[1], a[2], a[3], a[4], a[5]); break;
+        }
+    }
+    else
+    {
+        switch (argCount)
+        {
+        case 0: ret = reinterpret_cast<uint64_t(__fastcall *)()>(fn)(); break;
+        case 1: ret = reinterpret_cast<uint64_t(__fastcall *)(uint64_t)>(fn)(a[0]); break;
+        case 2: ret = reinterpret_cast<uint64_t(__fastcall *)(uint64_t, uint64_t)>(fn)(a[0], a[1]); break;
+        case 3: ret = reinterpret_cast<uint64_t(__fastcall *)(uint64_t, uint64_t, uint64_t)>(fn)(a[0], a[1], a[2]); break;
+        case 4: ret = reinterpret_cast<uint64_t(__fastcall *)(uint64_t, uint64_t, uint64_t, uint64_t)>(fn)(a[0], a[1], a[2], a[3]); break;
+        case 5: ret = reinterpret_cast<uint64_t(__fastcall *)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)>(fn)(a[0], a[1], a[2], a[3], a[4]); break;
+        default: ret = reinterpret_cast<uint64_t(__fastcall *)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)>(fn)(a[0], a[1], a[2], a[3], a[4], a[5]); break;
+        }
+    }
+
+    if (outRet)
+    {
+        switch (outRet->type)
+        {
+        case NativeType_I32:
+            outRet->value = static_cast<uint32_t>(ret);
+            break;
+        case NativeType_Bool:
+            outRet->value = ret ? 1 : 0;
+            break;
+        default:
+            outRet->value = ret;
+            break;
+        }
+    }
+
+    return 1;
+}
+
+int native_mixin_add(const char* fullName, int at, void* managedCallback, int require)
+{
+    return HookRegistry::AddHook(fullName, at, managedCallback, require) ? 1 : 0;
+}
+
+int native_mixin_remove(const char* fullName, void* managedCallback)
+{
+    return HookRegistry::RemoveHook(fullName, managedCallback) ? 1 : 0;
 }
 
 } // extern "C"

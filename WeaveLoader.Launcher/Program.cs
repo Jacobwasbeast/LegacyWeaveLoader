@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace WeaveLoader.Launcher;
@@ -20,6 +21,9 @@ class Program
         string configFile = Path.Combine(baseDir, "weaveloader.json");
         string runtimeDll = Path.Combine(baseDir, RuntimeDllName);
         string modsDir = Path.Combine(baseDir, "mods");
+        string metadataDir = Path.Combine(baseDir, "metadata");
+        string mappingPath = Path.Combine(metadataDir, "mapping.json");
+        string pdbDumpExe = Path.Combine(baseDir, "pdbdump.exe");
 
         try
         {
@@ -57,6 +61,43 @@ class Program
                 config.GameExePath = Path.GetFullPath(selected);
                 config.Save(configFile);
                 Console.WriteLine($"Saved game path to {configFile}");
+            }
+
+            bool mappingMissing = !File.Exists(mappingPath);
+            bool offsetsMissing = !File.Exists(Path.Combine(metadataDir, "offsets.json"));
+
+            if (mappingMissing || offsetsMissing)
+            {
+                if (!Directory.Exists(metadataDir))
+                    Directory.CreateDirectory(metadataDir);
+
+                string pdbPath = Path.ChangeExtension(config.GameExePath, ".pdb") ?? "";
+                string offsetsPath = Path.Combine(metadataDir, "offsets.json");
+                if (!File.Exists(pdbDumpExe))
+                {
+                    Console.WriteLine($"[WARN] pdbdump.exe not found at {pdbDumpExe} (mapping.json will not be generated)");
+                }
+                else if (!File.Exists(pdbPath))
+                {
+                    Console.WriteLine($"[WARN] PDB not found at {pdbPath} (mapping.json will not be generated)");
+                }
+                else
+                {
+                    Console.WriteLine("[..] Generating metadata from PDB...");
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = pdbDumpExe,
+                        Arguments = $"\"{pdbPath}\" \"{mappingPath}\" --offsets \"{config.GameExePath}\" \"{offsetsPath}\" --all-types",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using var proc = Process.Start(psi);
+                    proc?.WaitForExit();
+                    if (proc == null || proc.ExitCode != 0 || !File.Exists(mappingPath))
+                        Console.WriteLine("[WARN] mapping.json generation failed");
+                    else
+                        Console.WriteLine("[OK] mapping.json generated");
+                }
             }
 
             if (!File.Exists(runtimeDll))

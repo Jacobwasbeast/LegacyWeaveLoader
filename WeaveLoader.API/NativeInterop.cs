@@ -224,4 +224,22 @@ internal static class NativeInterop
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void native_add_to_creative(int numericId, int count, int auxValue, int groupIndex);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern nint native_find_symbol(string fullName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_has_symbol(string fullName);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_get_signature_key(string fullName, System.Text.StringBuilder outKey, int outLen);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_invoke(nint fn, nint thisPtr, int hasThis, Native.NativeArg[] args, int argCount, ref Native.NativeRet ret);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_mixin_add(string fullName, int at, nint managedCallback, int require);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int native_mixin_remove(string fullName, nint managedCallback);
 }

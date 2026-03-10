@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.1",
+  "package": "ExampleMod.Mixins",
+  "mixins": [],
+  "client": [
+    "CreeperExplosionMixin"
+  ],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

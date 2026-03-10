@@ -9,6 +9,8 @@ namespace ExampleMod;
      Description = "A sample mod demonstrating the WeaveLoader API")]
 public class ExampleMod : IMod
 {
+    private static nint s_currentLevel;
+    private static bool s_hasLevel;
     public static RegisteredBlock? RubyOre;
     public static RegisteredBlock? RubyStone;
     public static RegisteredBlock? RubyWoodPlanks;
@@ -189,6 +191,17 @@ public class ExampleMod : IMod
 
     public void OnInitialize()
     {
+        GameEvents.OnWorldLoaded += (_, e) =>
+        {
+            s_currentLevel = e.NativeLevelPointer;
+            s_hasLevel = s_currentLevel != 0;
+        };
+        GameEvents.OnWorldUnloaded += (_, __) =>
+        {
+            s_currentLevel = 0;
+            s_hasLevel = false;
+        };
+
         RubyOre = Registry.Block.Register("examplemod:ruby_ore",
             new BlockProperties()
                 .Material(MaterialType.Stone)
@@ -390,5 +403,11 @@ public class ExampleMod : IMod
     public void OnShutdown()
     {
         Logger.Info("Example Mod shutting down.");
+    }
+
+    internal static bool TryGetCurrentLevel(out nint levelPtr)
+    {
+        levelPtr = s_currentLevel;
+        return s_hasLevel && levelPtr != 0;
     }
 }

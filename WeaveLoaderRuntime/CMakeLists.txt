@@ -81,8 +81,10 @@ add_library(WeaveLoaderRuntime SHARED
     src/LogUtil.cpp
     src/CrashHandler.cpp
     src/PdbParser.cpp
+    src/SymbolRegistry.cpp
     src/SymbolResolver.cpp
     src/HookManager.cpp
+    src/HookRegistry.cpp
     src/GameHooks.cpp
     src/DotNetHost.cpp
     src/IdRegistry.cpp
@@ -137,4 +139,32 @@ set_target_properties(WeaveLoaderRuntime PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/../build"
     LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/../build"
     LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/../build"
+)
+
+# ── PDB dump tool ─────────────────────────────────────────────────────
+add_executable(pdbdump
+    tools/pdbdump.cpp
+    src/PdbParser.cpp
+    src/LogUtil.cpp
+)
+
+target_link_libraries(pdbdump PRIVATE
+    raw_pdb
+    Dbghelp
+    OleAut32
+)
+
+target_include_directories(pdbdump PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+target_compile_definitions(pdbdump PRIVATE
+    WIN32_LEAN_AND_MEAN
+    _CRT_SECURE_NO_WARNINGS
+)
+
+set_target_properties(pdbdump PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../build"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/../build"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/../build"
 )
