@@ -83,6 +83,7 @@ add_library(WeaveLoaderRuntime SHARED
     src/PdbParser.cpp
     src/SymbolRegistry.cpp
     src/SymbolResolver.cpp
+    src/Symbols/SymbolGroups.cpp
     src/HookManager.cpp
     src/HookRegistry.cpp
     src/GameHooks.cpp
@@ -106,6 +107,7 @@ add_library(WeaveLoaderRuntime SHARED
 target_include_directories(WeaveLoaderRuntime PRIVATE
     "${NETHOST_INCLUDE_DIR}"
     "${STB_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
 target_link_libraries(WeaveLoaderRuntime PRIVATE

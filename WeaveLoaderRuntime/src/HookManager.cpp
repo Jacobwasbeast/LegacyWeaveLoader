@@ -20,18 +20,18 @@ bool HookManager::Install(const SymbolResolver& symbols)
         return false;
     }
 
-    WorldIdRemap::SetTagNewTagSymbol(symbols.pTagNewTag);
-    WorldIdRemap::SetTileArraySymbol(symbols.pTileTiles);
+    WorldIdRemap::SetTagNewTagSymbol(symbols.Nbt.pTagNewTag);
+    WorldIdRemap::SetTileArraySymbol(symbols.Tile.pTileTiles);
     WorldIdRemap::SetLevelChunkTileSymbols(
-        symbols.pLevelChunkGetTile,
-        symbols.pLevelChunkSetTile,
-        symbols.pLevelChunkGetPos,
-        symbols.pLevelChunkGetHighestNonEmptyY);
-    WorldIdRemap::SetCompressedTileStorageSetSymbol(symbols.pCompressedTileStorageSet);
+        symbols.Level.pLevelChunkGetTile,
+        symbols.Level.pLevelChunkSetTile,
+        symbols.Level.pLevelChunkGetPos,
+        symbols.Level.pLevelChunkGetHighestNonEmptyY);
+    WorldIdRemap::SetCompressedTileStorageSetSymbol(symbols.Level.pCompressedTileStorageSet);
 
-    if (symbols.pRunStaticCtors)
+    if (symbols.Core.pRunStaticCtors)
     {
-        if (MH_CreateHook(symbols.pRunStaticCtors,
+        if (MH_CreateHook(symbols.Core.pRunStaticCtors,
                           reinterpret_cast<void*>(&GameHooks::Hooked_RunStaticCtors),
                           reinterpret_cast<void**>(&GameHooks::Original_RunStaticCtors)) != MH_OK)
         {
@@ -41,9 +41,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         LogUtil::Log("[WeaveLoader] Hooked RunStaticCtors");
     }
 
-    if (symbols.pMinecraftTick)
+    if (symbols.Core.pMinecraftTick)
     {
-        if (MH_CreateHook(symbols.pMinecraftTick,
+        if (MH_CreateHook(symbols.Core.pMinecraftTick,
                           reinterpret_cast<void*>(&GameHooks::Hooked_MinecraftTick),
                           reinterpret_cast<void**>(&GameHooks::Original_MinecraftTick)) != MH_OK)
         {
@@ -53,9 +53,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         LogUtil::Log("[WeaveLoader] Hooked Minecraft::tick");
     }
 
-    if (symbols.pMinecraftInit)
+    if (symbols.Core.pMinecraftInit)
     {
-        if (MH_CreateHook(symbols.pMinecraftInit,
+        if (MH_CreateHook(symbols.Core.pMinecraftInit,
                           reinterpret_cast<void*>(&GameHooks::Hooked_MinecraftInit),
                           reinterpret_cast<void**>(&GameHooks::Original_MinecraftInit)) != MH_OK)
         {
@@ -65,9 +65,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         LogUtil::Log("[WeaveLoader] Hooked Minecraft::init");
     }
 
-    if (symbols.pMinecraftSetLevel)
+    if (symbols.Core.pMinecraftSetLevel)
     {
-        if (MH_CreateHook(symbols.pMinecraftSetLevel,
+        if (MH_CreateHook(symbols.Core.pMinecraftSetLevel,
                           reinterpret_cast<void*>(&GameHooks::Hooked_MinecraftSetLevel),
                           reinterpret_cast<void**>(&GameHooks::Original_MinecraftSetLevel)) != MH_OK)
         {
@@ -79,9 +79,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pItemInstanceMineBlock)
+    if (symbols.Item.pItemInstanceMineBlock)
     {
-        if (MH_CreateHook(symbols.pItemInstanceMineBlock,
+        if (MH_CreateHook(symbols.Item.pItemInstanceMineBlock,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceMineBlock),
                           reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceMineBlock)) != MH_OK)
         {
@@ -93,9 +93,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pItemInstanceSave)
+    if (symbols.Item.pItemInstanceSave)
     {
-        if (MH_CreateHook(symbols.pItemInstanceSave,
+        if (MH_CreateHook(symbols.Item.pItemInstanceSave,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceSave),
                           reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceSave)) != MH_OK)
         {
@@ -107,9 +107,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pItemInstanceLoad)
+    if (symbols.Item.pItemInstanceLoad)
     {
-        if (MH_CreateHook(symbols.pItemInstanceLoad,
+        if (MH_CreateHook(symbols.Item.pItemInstanceLoad,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceLoad),
                           reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceLoad)) != MH_OK)
         {
@@ -121,9 +121,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pItemInstanceGetIcon)
+    if (symbols.Item.pItemInstanceGetIcon)
     {
-        if (MH_CreateHook(symbols.pItemInstanceGetIcon,
+        if (MH_CreateHook(symbols.Item.pItemInstanceGetIcon,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceGetIcon),
                           reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceGetIcon)) != MH_OK)
         {
@@ -135,9 +135,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pEntityRendererBindTextureResource)
+    if (symbols.Texture.pEntityRendererBindTextureResource)
     {
-        if (MH_CreateHook(symbols.pEntityRendererBindTextureResource,
+        if (MH_CreateHook(symbols.Texture.pEntityRendererBindTextureResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_EntityRendererBindTextureResource),
                           reinterpret_cast<void**>(&GameHooks::Original_EntityRendererBindTextureResource)) != MH_OK)
         {
@@ -149,9 +149,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pItemRendererRenderItemBillboard)
+    if (symbols.Texture.pItemRendererRenderItemBillboard)
     {
-        if (MH_CreateHook(symbols.pItemRendererRenderItemBillboard,
+        if (MH_CreateHook(symbols.Texture.pItemRendererRenderItemBillboard,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ItemRendererRenderItemBillboard),
                           reinterpret_cast<void**>(&GameHooks::Original_ItemRendererRenderItemBillboard)) != MH_OK)
         {
@@ -163,9 +163,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pCompassTextureCycleFrames)
+    if (symbols.Texture.pCompassTextureCycleFrames)
     {
-        if (MH_CreateHook(symbols.pCompassTextureCycleFrames,
+        if (MH_CreateHook(symbols.Texture.pCompassTextureCycleFrames,
                           reinterpret_cast<void*>(&GameHooks::Hooked_CompassTextureCycleFrames),
                           reinterpret_cast<void**>(&GameHooks::Original_CompassTextureCycleFrames)) != MH_OK)
         {
@@ -177,9 +177,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pClockTextureCycleFrames)
+    if (symbols.Texture.pClockTextureCycleFrames)
     {
-        if (MH_CreateHook(symbols.pClockTextureCycleFrames,
+        if (MH_CreateHook(symbols.Texture.pClockTextureCycleFrames,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ClockTextureCycleFrames),
                           reinterpret_cast<void**>(&GameHooks::Original_ClockTextureCycleFrames)) != MH_OK)
         {
@@ -191,9 +191,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pCompassTextureGetSourceWidth)
+    if (symbols.Texture.pCompassTextureGetSourceWidth)
     {
-        if (MH_CreateHook(symbols.pCompassTextureGetSourceWidth,
+        if (MH_CreateHook(symbols.Texture.pCompassTextureGetSourceWidth,
                           reinterpret_cast<void*>(&GameHooks::Hooked_CompassTextureGetSourceWidth),
                           reinterpret_cast<void**>(&GameHooks::Original_CompassTextureGetSourceWidth)) != MH_OK)
         {
@@ -205,9 +205,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pCompassTextureGetSourceHeight)
+    if (symbols.Texture.pCompassTextureGetSourceHeight)
     {
-        if (MH_CreateHook(symbols.pCompassTextureGetSourceHeight,
+        if (MH_CreateHook(symbols.Texture.pCompassTextureGetSourceHeight,
                           reinterpret_cast<void*>(&GameHooks::Hooked_CompassTextureGetSourceHeight),
                           reinterpret_cast<void**>(&GameHooks::Original_CompassTextureGetSourceHeight)) != MH_OK)
         {
@@ -219,9 +219,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pClockTextureGetSourceWidth)
+    if (symbols.Texture.pClockTextureGetSourceWidth)
     {
-        if (MH_CreateHook(symbols.pClockTextureGetSourceWidth,
+        if (MH_CreateHook(symbols.Texture.pClockTextureGetSourceWidth,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ClockTextureGetSourceWidth),
                           reinterpret_cast<void**>(&GameHooks::Original_ClockTextureGetSourceWidth)) != MH_OK)
         {
@@ -233,9 +233,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pClockTextureGetSourceHeight)
+    if (symbols.Texture.pClockTextureGetSourceHeight)
     {
-        if (MH_CreateHook(symbols.pClockTextureGetSourceHeight,
+        if (MH_CreateHook(symbols.Texture.pClockTextureGetSourceHeight,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ClockTextureGetSourceHeight),
                           reinterpret_cast<void**>(&GameHooks::Original_ClockTextureGetSourceHeight)) != MH_OK)
         {
@@ -247,9 +247,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pItemMineBlock)
+    if (symbols.Item.pItemMineBlock)
     {
-        if (MH_CreateHook(symbols.pItemMineBlock,
+        if (MH_CreateHook(symbols.Item.pItemMineBlock,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ItemMineBlock),
                           reinterpret_cast<void**>(&GameHooks::Original_ItemMineBlock)) != MH_OK)
         {
@@ -261,9 +261,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pDiggerItemMineBlock)
+    if (symbols.Item.pDiggerItemMineBlock)
     {
-        if (MH_CreateHook(symbols.pDiggerItemMineBlock,
+        if (MH_CreateHook(symbols.Item.pDiggerItemMineBlock,
                           reinterpret_cast<void*>(&GameHooks::Hooked_DiggerItemMineBlock),
                           reinterpret_cast<void**>(&GameHooks::Original_DiggerItemMineBlock)) != MH_OK)
         {
@@ -275,9 +275,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pPickaxeItemGetDestroySpeed)
+    if (symbols.Item.pPickaxeItemGetDestroySpeed)
     {
-        if (MH_CreateHook(symbols.pPickaxeItemGetDestroySpeed,
+        if (MH_CreateHook(symbols.Item.pPickaxeItemGetDestroySpeed,
                           reinterpret_cast<void*>(&GameHooks::Hooked_PickaxeItemGetDestroySpeed),
                           reinterpret_cast<void**>(&GameHooks::Original_PickaxeItemGetDestroySpeed)) != MH_OK)
         {
@@ -289,9 +289,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pPickaxeItemCanDestroySpecial)
+    if (symbols.Item.pPickaxeItemCanDestroySpecial)
     {
-        if (MH_CreateHook(symbols.pPickaxeItemCanDestroySpecial,
+        if (MH_CreateHook(symbols.Item.pPickaxeItemCanDestroySpecial,
                           reinterpret_cast<void*>(&GameHooks::Hooked_PickaxeItemCanDestroySpecial),
                           reinterpret_cast<void**>(&GameHooks::Original_PickaxeItemCanDestroySpecial)) != MH_OK)
         {
@@ -303,9 +303,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pShovelItemGetDestroySpeed)
+    if (symbols.Item.pShovelItemGetDestroySpeed)
     {
-        if (MH_CreateHook(symbols.pShovelItemGetDestroySpeed,
+        if (MH_CreateHook(symbols.Item.pShovelItemGetDestroySpeed,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ShovelItemGetDestroySpeed),
                           reinterpret_cast<void**>(&GameHooks::Original_ShovelItemGetDestroySpeed)) != MH_OK)
         {
@@ -317,9 +317,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pShovelItemCanDestroySpecial)
+    if (symbols.Item.pShovelItemCanDestroySpecial)
     {
-        if (MH_CreateHook(symbols.pShovelItemCanDestroySpecial,
+        if (MH_CreateHook(symbols.Item.pShovelItemCanDestroySpecial,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ShovelItemCanDestroySpecial),
                           reinterpret_cast<void**>(&GameHooks::Original_ShovelItemCanDestroySpecial)) != MH_OK)
         {
@@ -331,9 +331,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pLevelSetTileAndData)
+    if (symbols.Level.pLevelSetTileAndData)
     {
-        if (MH_CreateHook(symbols.pLevelSetTileAndData,
+        if (MH_CreateHook(symbols.Level.pLevelSetTileAndData,
                           reinterpret_cast<void*>(&GameHooks::Hooked_LevelSetTileAndData),
                           reinterpret_cast<void**>(&GameHooks::Original_LevelSetTileAndData)) != MH_OK)
         {
@@ -345,9 +345,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pLevelSetData)
+    if (symbols.Level.pLevelSetData)
     {
-        if (MH_CreateHook(symbols.pLevelSetData,
+        if (MH_CreateHook(symbols.Level.pLevelSetData,
                           reinterpret_cast<void*>(&GameHooks::Hooked_LevelSetData),
                           reinterpret_cast<void**>(&GameHooks::Original_LevelSetData)) != MH_OK)
         {
@@ -359,9 +359,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pLevelUpdateNeighborsAt)
+    if (symbols.Level.pLevelUpdateNeighborsAt)
     {
-        if (MH_CreateHook(symbols.pLevelUpdateNeighborsAt,
+        if (MH_CreateHook(symbols.Level.pLevelUpdateNeighborsAt,
                           reinterpret_cast<void*>(&GameHooks::Hooked_LevelUpdateNeighborsAt),
                           reinterpret_cast<void**>(&GameHooks::Original_LevelUpdateNeighborsAt)) != MH_OK)
         {
@@ -373,9 +373,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pServerLevelTickPendingTicks)
+    if (symbols.Level.pServerLevelTickPendingTicks)
     {
-        if (MH_CreateHook(symbols.pServerLevelTickPendingTicks,
+        if (MH_CreateHook(symbols.Level.pServerLevelTickPendingTicks,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ServerLevelTickPendingTicks),
                           reinterpret_cast<void**>(&GameHooks::Original_ServerLevelTickPendingTicks)) != MH_OK)
         {
@@ -387,9 +387,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pMcRegionChunkStorageLoad)
+    if (symbols.Level.pMcRegionChunkStorageLoad)
     {
-        if (MH_CreateHook(symbols.pMcRegionChunkStorageLoad,
+        if (MH_CreateHook(symbols.Level.pMcRegionChunkStorageLoad,
                           reinterpret_cast<void*>(&GameHooks::Hooked_McRegionChunkStorageLoad),
                           reinterpret_cast<void**>(&GameHooks::Original_McRegionChunkStorageLoad)) != MH_OK)
         {
@@ -401,9 +401,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pMcRegionChunkStorageSave)
+    if (symbols.Level.pMcRegionChunkStorageSave)
     {
-        if (MH_CreateHook(symbols.pMcRegionChunkStorageSave,
+        if (MH_CreateHook(symbols.Level.pMcRegionChunkStorageSave,
                           reinterpret_cast<void*>(&GameHooks::Hooked_McRegionChunkStorageSave),
                           reinterpret_cast<void**>(&GameHooks::Original_McRegionChunkStorageSave)) != MH_OK)
         {
@@ -415,9 +415,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTileGetResource)
+    if (symbols.Tile.pTileGetResource)
     {
-        if (MH_CreateHook(symbols.pTileGetResource,
+        if (MH_CreateHook(symbols.Tile.pTileGetResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TileGetResource),
                           reinterpret_cast<void**>(&GameHooks::Original_TileGetResource)) != MH_OK)
         {
@@ -429,9 +429,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTileCloneTileId)
+    if (symbols.Tile.pTileCloneTileId)
     {
-        if (MH_CreateHook(symbols.pTileCloneTileId,
+        if (MH_CreateHook(symbols.Tile.pTileCloneTileId,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TileCloneTileId),
                           reinterpret_cast<void**>(&GameHooks::Original_TileCloneTileId)) != MH_OK)
         {
@@ -443,9 +443,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabGetTexture)
+    if (symbols.Tile.pStoneSlabGetTexture)
     {
-        if (MH_CreateHook(symbols.pStoneSlabGetTexture,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabGetTexture,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetTexture),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetTexture)) != MH_OK)
         {
@@ -457,9 +457,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pWoodSlabGetTexture)
+    if (symbols.Tile.pWoodSlabGetTexture)
     {
-        if (MH_CreateHook(symbols.pWoodSlabGetTexture,
+        if (MH_CreateHook(symbols.Tile.pWoodSlabGetTexture,
                           reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetTexture),
                           reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetTexture)) != MH_OK)
         {
@@ -471,9 +471,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabGetResource)
+    if (symbols.Tile.pStoneSlabGetResource)
     {
-        if (MH_CreateHook(symbols.pStoneSlabGetResource,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabGetResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetResource),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetResource)) != MH_OK)
         {
@@ -485,9 +485,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pWoodSlabGetResource)
+    if (symbols.Tile.pWoodSlabGetResource)
     {
-        if (MH_CreateHook(symbols.pWoodSlabGetResource,
+        if (MH_CreateHook(symbols.Tile.pWoodSlabGetResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetResource),
                           reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetResource)) != MH_OK)
         {
@@ -499,9 +499,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabGetDescriptionId)
+    if (symbols.Tile.pStoneSlabGetDescriptionId)
     {
-        if (MH_CreateHook(symbols.pStoneSlabGetDescriptionId,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabGetDescriptionId,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetDescriptionId),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetDescriptionId)) != MH_OK)
         {
@@ -513,9 +513,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pWoodSlabGetDescriptionId)
+    if (symbols.Tile.pWoodSlabGetDescriptionId)
     {
-        if (MH_CreateHook(symbols.pWoodSlabGetDescriptionId,
+        if (MH_CreateHook(symbols.Tile.pWoodSlabGetDescriptionId,
                           reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetDescriptionId),
                           reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetDescriptionId)) != MH_OK)
         {
@@ -527,9 +527,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabGetAuxName)
+    if (symbols.Tile.pStoneSlabGetAuxName)
     {
-        if (MH_CreateHook(symbols.pStoneSlabGetAuxName,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabGetAuxName,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabGetAuxName),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabGetAuxName)) != MH_OK)
         {
@@ -541,9 +541,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pWoodSlabGetAuxName)
+    if (symbols.Tile.pWoodSlabGetAuxName)
     {
-        if (MH_CreateHook(symbols.pWoodSlabGetAuxName,
+        if (MH_CreateHook(symbols.Tile.pWoodSlabGetAuxName,
                           reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabGetAuxName),
                           reinterpret_cast<void**>(&GameHooks::Original_WoodSlabGetAuxName)) != MH_OK)
         {
@@ -555,9 +555,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabRegisterIcons)
+    if (symbols.Tile.pStoneSlabRegisterIcons)
     {
-        if (MH_CreateHook(symbols.pStoneSlabRegisterIcons,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabRegisterIcons,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabRegisterIcons),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabRegisterIcons)) != MH_OK)
         {
@@ -565,14 +565,14 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
         else
         {
-            MH_EnableHook(symbols.pStoneSlabRegisterIcons);
+            MH_EnableHook(symbols.Tile.pStoneSlabRegisterIcons);
             LogUtil::Log("[WeaveLoader] Hooked StoneSlabTile::registerIcons (custom slabs)");
         }
     }
 
-    if (symbols.pWoodSlabRegisterIcons)
+    if (symbols.Tile.pWoodSlabRegisterIcons)
     {
-        if (MH_CreateHook(symbols.pWoodSlabRegisterIcons,
+        if (MH_CreateHook(symbols.Tile.pWoodSlabRegisterIcons,
                           reinterpret_cast<void*>(&GameHooks::Hooked_WoodSlabRegisterIcons),
                           reinterpret_cast<void**>(&GameHooks::Original_WoodSlabRegisterIcons)) != MH_OK)
         {
@@ -580,14 +580,14 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
         else
         {
-            MH_EnableHook(symbols.pWoodSlabRegisterIcons);
+            MH_EnableHook(symbols.Tile.pWoodSlabRegisterIcons);
             LogUtil::Log("[WeaveLoader] Hooked WoodSlabTile::registerIcons (custom slabs)");
         }
     }
 
-    if (symbols.pHalfSlabCloneTileId)
+    if (symbols.Tile.pHalfSlabCloneTileId)
     {
-        if (MH_CreateHook(symbols.pHalfSlabCloneTileId,
+        if (MH_CreateHook(symbols.Tile.pHalfSlabCloneTileId,
                           reinterpret_cast<void*>(&GameHooks::Hooked_HalfSlabCloneTileId),
                           reinterpret_cast<void**>(&GameHooks::Original_HalfSlabCloneTileId)) != MH_OK)
         {
@@ -599,9 +599,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabItemGetDescriptionId)
+    if (symbols.Tile.pStoneSlabItemGetDescriptionId)
     {
-        if (MH_CreateHook(symbols.pStoneSlabItemGetDescriptionId,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabItemGetDescriptionId,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabItemGetDescriptionId),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabItemGetDescriptionId)) != MH_OK)
         {
@@ -613,9 +613,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pStoneSlabItemGetIcon)
+    if (symbols.Tile.pStoneSlabItemGetIcon)
     {
-        if (MH_CreateHook(symbols.pStoneSlabItemGetIcon,
+        if (MH_CreateHook(symbols.Tile.pStoneSlabItemGetIcon,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StoneSlabItemGetIcon),
                           reinterpret_cast<void**>(&GameHooks::Original_StoneSlabItemGetIcon)) != MH_OK)
         {
@@ -627,9 +627,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pPlayerCanDestroy)
+    if (symbols.Entity.pPlayerCanDestroy)
     {
-        if (MH_CreateHook(symbols.pPlayerCanDestroy,
+        if (MH_CreateHook(symbols.Entity.pPlayerCanDestroy,
                           reinterpret_cast<void*>(&GameHooks::Hooked_PlayerCanDestroy),
                           reinterpret_cast<void**>(&GameHooks::Original_PlayerCanDestroy)) != MH_OK)
         {
@@ -641,9 +641,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pServerPlayerGameModeUseItem)
+    if (symbols.Entity.pServerPlayerGameModeUseItem)
     {
-        if (MH_CreateHook(symbols.pServerPlayerGameModeUseItem,
+        if (MH_CreateHook(symbols.Entity.pServerPlayerGameModeUseItem,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ServerPlayerGameModeUseItem),
                           reinterpret_cast<void**>(&GameHooks::Original_ServerPlayerGameModeUseItem)) != MH_OK)
         {
@@ -655,9 +655,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pMultiPlayerGameModeUseItem)
+    if (symbols.Entity.pMultiPlayerGameModeUseItem)
     {
-        if (MH_CreateHook(symbols.pMultiPlayerGameModeUseItem,
+        if (MH_CreateHook(symbols.Entity.pMultiPlayerGameModeUseItem,
                           reinterpret_cast<void*>(&GameHooks::Hooked_MultiPlayerGameModeUseItem),
                           reinterpret_cast<void**>(&GameHooks::Original_MultiPlayerGameModeUseItem)) != MH_OK)
         {
@@ -669,24 +669,24 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    GameHooks::SetAtlasLocationPointers(symbols.pTextureAtlasLocationBlocks, symbols.pTextureAtlasLocationItems);
-    GameHooks::SetTileTilesArray(symbols.pTileTiles);
-    GameHooks::SetBlockHelperSymbols(symbols.pTileGetTextureFaceData);
-    GameHooks::SetManagedBlockDispatchSymbols(symbols.pLevelGetTile);
+    GameHooks::SetAtlasLocationPointers(symbols.Texture.pTextureAtlasLocationBlocks, symbols.Texture.pTextureAtlasLocationItems);
+    GameHooks::SetTileTilesArray(symbols.Tile.pTileTiles);
+    GameHooks::SetBlockHelperSymbols(symbols.Tile.pTileGetTextureFaceData);
+    GameHooks::SetManagedBlockDispatchSymbols(symbols.Level.pLevelGetTile);
     NativeExports::SetLevelInteropSymbols(
-        symbols.pLevelHasNeighborSignal,
-        symbols.pLevelSetTileAndData,
-        symbols.pServerLevelAddToTickNextTick ? symbols.pServerLevelAddToTickNextTick
-                                              : symbols.pLevelAddToTickNextTick,
-        symbols.pLevelGetTile);
+        symbols.Level.pLevelHasNeighborSignal,
+        symbols.Level.pLevelSetTileAndData,
+        symbols.Level.pServerLevelAddToTickNextTick ? symbols.Level.pServerLevelAddToTickNextTick
+                                              : symbols.Level.pLevelAddToTickNextTick,
+        symbols.Level.pLevelGetTile);
     NativeExports::SetLocalizationSymbols(
-        symbols.pMinecraftApp,
-        symbols.pGetMinecraftLanguage,
-        symbols.pGetMinecraftLocale);
+        symbols.Core.pMinecraftApp,
+        symbols.Core.pGetMinecraftLanguage,
+        symbols.Core.pGetMinecraftLocale);
 
-    if (symbols.pTexturesBindTextureResource)
+    if (symbols.Texture.pTexturesBindTextureResource)
     {
-        if (MH_CreateHook(symbols.pTexturesBindTextureResource,
+        if (MH_CreateHook(symbols.Texture.pTexturesBindTextureResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TexturesBindTextureResource),
                           reinterpret_cast<void**>(&GameHooks::Original_TexturesBindTextureResource)) != MH_OK)
         {
@@ -698,9 +698,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTexturesLoadTextureByName)
+    if (symbols.Texture.pTexturesLoadTextureByName)
     {
-        if (MH_CreateHook(symbols.pTexturesLoadTextureByName,
+        if (MH_CreateHook(symbols.Texture.pTexturesLoadTextureByName,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TexturesLoadTextureByName),
                           reinterpret_cast<void**>(&GameHooks::Original_TexturesLoadTextureByName)) != MH_OK)
         {
@@ -712,9 +712,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTexturesLoadTextureByIndex)
+    if (symbols.Texture.pTexturesLoadTextureByIndex)
     {
-        if (MH_CreateHook(symbols.pTexturesLoadTextureByIndex,
+        if (MH_CreateHook(symbols.Texture.pTexturesLoadTextureByIndex,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TexturesLoadTextureByIndex),
                           reinterpret_cast<void**>(&GameHooks::Original_TexturesLoadTextureByIndex)) != MH_OK)
         {
@@ -726,9 +726,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTexturesReadImage)
+    if (symbols.Texture.pTexturesReadImage)
     {
-        if (MH_CreateHook(symbols.pTexturesReadImage,
+        if (MH_CreateHook(symbols.Texture.pTexturesReadImage,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TexturesReadImage),
                           reinterpret_cast<void**>(&GameHooks::Original_TexturesReadImage)) != MH_OK)
         {
@@ -740,9 +740,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTextureManagerCreateTexture)
+    if (symbols.Texture.pTextureManagerCreateTexture)
     {
-        if (MH_CreateHook(symbols.pTextureManagerCreateTexture,
+        if (MH_CreateHook(symbols.Texture.pTextureManagerCreateTexture,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TextureManagerCreateTexture),
                           reinterpret_cast<void**>(&GameHooks::Original_TextureManagerCreateTexture)) != MH_OK)
         {
@@ -754,9 +754,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pTextureTransferFromImage)
+    if (symbols.Texture.pTextureTransferFromImage)
     {
-        if (MH_CreateHook(symbols.pTextureTransferFromImage,
+        if (MH_CreateHook(symbols.Texture.pTextureTransferFromImage,
                           reinterpret_cast<void*>(&GameHooks::Hooked_TextureTransferFromImage),
                           reinterpret_cast<void**>(&GameHooks::Original_TextureTransferFromImage)) != MH_OK)
         {
@@ -768,9 +768,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pAbstractTexturePackGetImageResource)
+    if (symbols.Resource.pAbstractTexturePackGetImageResource)
     {
-        if (MH_CreateHook(symbols.pAbstractTexturePackGetImageResource,
+        if (MH_CreateHook(symbols.Resource.pAbstractTexturePackGetImageResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_AbstractTexturePackGetImageResource),
                           reinterpret_cast<void**>(&GameHooks::Original_AbstractTexturePackGetImageResource)) != MH_OK)
         {
@@ -782,9 +782,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pDLCTexturePackGetImageResource)
+    if (symbols.Resource.pDLCTexturePackGetImageResource)
     {
-        if (MH_CreateHook(symbols.pDLCTexturePackGetImageResource,
+        if (MH_CreateHook(symbols.Resource.pDLCTexturePackGetImageResource,
                           reinterpret_cast<void*>(&GameHooks::Hooked_DLCTexturePackGetImageResource),
                           reinterpret_cast<void**>(&GameHooks::Original_DLCTexturePackGetImageResource)) != MH_OK)
         {
@@ -799,36 +799,36 @@ bool HookManager::Install(const SymbolResolver& symbols)
     // BufferedImage constructor hooks disabled: the work is now handled in
     // Textures::readImage for stability during boot.
 
-    if (symbols.pStitchedGetU0)
+    if (symbols.Texture.pStitchedGetU0)
     {
-        if (MH_CreateHook(symbols.pStitchedGetU0,
+        if (MH_CreateHook(symbols.Texture.pStitchedGetU0,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetU0),
                           reinterpret_cast<void**>(&GameHooks::Original_StitchedGetU0)) != MH_OK)
         {
             LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getU0");
         }
     }
-    if (symbols.pStitchedGetU1)
+    if (symbols.Texture.pStitchedGetU1)
     {
-        if (MH_CreateHook(symbols.pStitchedGetU1,
+        if (MH_CreateHook(symbols.Texture.pStitchedGetU1,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetU1),
                           reinterpret_cast<void**>(&GameHooks::Original_StitchedGetU1)) != MH_OK)
         {
             LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getU1");
         }
     }
-    if (symbols.pStitchedGetV0)
+    if (symbols.Texture.pStitchedGetV0)
     {
-        if (MH_CreateHook(symbols.pStitchedGetV0,
+        if (MH_CreateHook(symbols.Texture.pStitchedGetV0,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetV0),
                           reinterpret_cast<void**>(&GameHooks::Original_StitchedGetV0)) != MH_OK)
         {
             LogUtil::Log("[WeaveLoader] Warning: Failed to hook StitchedTexture::getV0");
         }
     }
-    if (symbols.pStitchedGetV1)
+    if (symbols.Texture.pStitchedGetV1)
     {
-        if (MH_CreateHook(symbols.pStitchedGetV1,
+        if (MH_CreateHook(symbols.Texture.pStitchedGetV1,
                           reinterpret_cast<void*>(&GameHooks::Hooked_StitchedGetV1),
                           reinterpret_cast<void**>(&GameHooks::Original_StitchedGetV1)) != MH_OK)
         {
@@ -836,9 +836,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pExitGame)
+    if (symbols.Core.pExitGame)
     {
-        if (MH_CreateHook(symbols.pExitGame,
+        if (MH_CreateHook(symbols.Core.pExitGame,
                           reinterpret_cast<void*>(&GameHooks::Hooked_ExitGame),
                           reinterpret_cast<void**>(&GameHooks::Original_ExitGame)) != MH_OK)
         {
@@ -853,23 +853,23 @@ bool HookManager::Install(const SymbolResolver& symbols)
     GameObjectFactory::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
     FurnaceRecipeRegistry::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
     GameHooks::SetSummonSymbols(
-        symbols.pLevelAddEntity,
-        symbols.pEntityIONewById,
-        symbols.pEntityMoveTo,
-        symbols.pEntitySetPos);
+        symbols.Entity.pLevelAddEntity,
+        symbols.Entity.pEntityIONewById,
+        symbols.Entity.pEntityMoveTo,
+        symbols.Entity.pEntitySetPos);
     GameHooks::SetUseActionSymbols(
-        symbols.pInventoryRemoveResource,
-        symbols.pInventoryVtable,
-        symbols.pItemInstanceHurtAndBreak,
-        symbols.pAbstractContainerMenuBroadcastChanges,
-        symbols.pEntityGetLookAngle,
-        symbols.pLivingEntityGetViewVector,
-        symbols.pEntityLerpMotion,
-        symbols.pEntitySetPos);
+        symbols.Inventory.pInventoryRemoveResource,
+        symbols.Inventory.pInventoryVtable,
+        symbols.Item.pItemInstanceHurtAndBreak,
+        symbols.Inventory.pAbstractContainerMenuBroadcastChanges,
+        symbols.Entity.pEntityGetLookAngle,
+        symbols.Entity.pLivingEntityGetViewVector,
+        symbols.Entity.pEntityLerpMotion,
+        symbols.Entity.pEntitySetPos);
 
-    if (symbols.pPreStitchedTextureMapStitch)
+    if (symbols.Texture.pPreStitchedTextureMapStitch)
     {
-        if (MH_CreateHook(symbols.pPreStitchedTextureMapStitch,
+        if (MH_CreateHook(symbols.Texture.pPreStitchedTextureMapStitch,
                           reinterpret_cast<void*>(&GameHooks::Hooked_PreStitchedTextureMapStitch),
                           reinterpret_cast<void**>(&GameHooks::Original_PreStitchedTextureMapStitch)) != MH_OK)
         {
@@ -881,10 +881,10 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pLoadUVs && symbols.pSimpleIconCtor && symbols.pOperatorNew)
+    if (symbols.Texture.pLoadUVs && symbols.Texture.pSimpleIconCtor && symbols.Texture.pOperatorNew)
     {
-        ModAtlas::SetInjectSymbols(symbols.pSimpleIconCtor, symbols.pOperatorNew);
-        if (MH_CreateHook(symbols.pLoadUVs,
+        ModAtlas::SetInjectSymbols(symbols.Texture.pSimpleIconCtor, symbols.Texture.pOperatorNew);
+        if (MH_CreateHook(symbols.Texture.pLoadUVs,
                           reinterpret_cast<void*>(&GameHooks::Hooked_LoadUVs),
                           reinterpret_cast<void**>(&GameHooks::Original_LoadUVs)) != MH_OK)
         {
@@ -895,9 +895,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
             LogUtil::Log("[WeaveLoader] Hooked PreStitchedTextureMap::loadUVs (mod texture injection)");
         }
 
-        if (symbols.pRegisterIcon)
+        if (symbols.Texture.pRegisterIcon)
         {
-            if (MH_CreateHook(symbols.pRegisterIcon,
+            if (MH_CreateHook(symbols.Texture.pRegisterIcon,
                               reinterpret_cast<void*>(&GameHooks::Hooked_RegisterIcon),
                               reinterpret_cast<void**>(&GameHooks::Original_RegisterIcon)) != MH_OK)
             {
@@ -912,16 +912,16 @@ bool HookManager::Install(const SymbolResolver& symbols)
             }
         }
     }
-    else if (symbols.pLoadUVs)
+    else if (symbols.Texture.pLoadUVs)
     {
         LogUtil::Log("[WeaveLoader] Mod texture injection unavailable: SimpleIcon/operator new not resolved");
     }
 
-    if (symbols.pCreativeStaticCtor)
+    if (symbols.Ui.pCreativeStaticCtor)
     {
         CreativeInventory::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
 
-        if (MH_CreateHook(symbols.pCreativeStaticCtor,
+        if (MH_CreateHook(symbols.Ui.pCreativeStaticCtor,
                           reinterpret_cast<void*>(&GameHooks::Hooked_CreativeStaticCtor),
                           reinterpret_cast<void**>(&GameHooks::Original_CreativeStaticCtor)) != MH_OK)
         {
@@ -933,9 +933,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pMainMenuCustomDraw)
+    if (symbols.Ui.pMainMenuCustomDraw)
     {
-        if (MH_CreateHook(symbols.pMainMenuCustomDraw,
+        if (MH_CreateHook(symbols.Ui.pMainMenuCustomDraw,
                           reinterpret_cast<void*>(&GameHooks::Hooked_MainMenuCustomDraw),
                           reinterpret_cast<void**>(&GameHooks::Original_MainMenuCustomDraw)) != MH_OK)
         {
@@ -947,11 +947,11 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pPresent)
+    if (symbols.Core.pPresent)
     {
         MainMenuOverlay::ResolveSymbols(const_cast<SymbolResolver&>(symbols));
 
-        if (MH_CreateHook(symbols.pPresent,
+        if (MH_CreateHook(symbols.Core.pPresent,
                           reinterpret_cast<void*>(&GameHooks::Hooked_Present),
                           reinterpret_cast<void**>(&GameHooks::Original_Present)) != MH_OK)
         {
@@ -963,12 +963,12 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
-    if (symbols.pGetString)
+    if (symbols.Ui.pGetString)
     {
         // Read GetString prologue bytes BEFORE MinHook overwrites them.
-        ModStrings::CaptureStringTableRef(symbols.pGetString);
+        ModStrings::CaptureStringTableRef(symbols.Ui.pGetString);
 
-        if (MH_CreateHook(symbols.pGetString,
+        if (MH_CreateHook(symbols.Ui.pGetString,
                           reinterpret_cast<void*>(&GameHooks::Hooked_GetString),
                           reinterpret_cast<void**>(&GameHooks::Original_GetString)) != MH_OK)
         {
@@ -981,9 +981,9 @@ bool HookManager::Install(const SymbolResolver& symbols)
     }
 
 
-    if (symbols.pGetResourceAsStream)
+    if (symbols.Resource.pGetResourceAsStream)
     {
-        if (MH_CreateHook(symbols.pGetResourceAsStream,
+        if (MH_CreateHook(symbols.Resource.pGetResourceAsStream,
                           reinterpret_cast<void*>(&GameHooks::Hooked_GetResourceAsStream),
                           reinterpret_cast<void**>(&GameHooks::Original_GetResourceAsStream)) != MH_OK)
         {
