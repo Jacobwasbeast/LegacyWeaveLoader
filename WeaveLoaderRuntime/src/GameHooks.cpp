@@ -15,8 +15,10 @@
 #include <string>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 #include <cwctype>
 #include <memory>
+#include <unordered_map>
 #include <cstddef>
 #include <vector>
 
@@ -33,6 +35,7 @@ namespace GameHooks
     GetString_fn          Original_GetString = nullptr;
     GetResourceAsStream_fn Original_GetResourceAsStream = nullptr;
     LoadUVs_fn             Original_LoadUVs = nullptr;
+    PreStitchedTextureMapStitch_fn Original_PreStitchedTextureMapStitch = nullptr;
     RegisterIcon_fn        Original_RegisterIcon = nullptr;
     ItemInstanceGetIcon_fn Original_ItemInstanceGetIcon = nullptr;
     EntityRendererBindTextureResource_fn Original_EntityRendererBindTextureResource = nullptr;
@@ -83,10 +86,17 @@ namespace GameHooks
     TexturesBindTextureResource_fn Original_TexturesBindTextureResource = nullptr;
     TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName = nullptr;
     TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex = nullptr;
+    TexturesReadImage_fn Original_TexturesReadImage = nullptr;
     StitchedTextureUV_fn   Original_StitchedGetU0 = nullptr;
     StitchedTextureUV_fn   Original_StitchedGetU1 = nullptr;
     StitchedTextureUV_fn   Original_StitchedGetV0 = nullptr;
     StitchedTextureUV_fn   Original_StitchedGetV1 = nullptr;
+    BufferedImageCtorFile_fn Original_BufferedImageCtorFile = nullptr;
+    BufferedImageCtorDLCPack_fn Original_BufferedImageCtorDLCPack = nullptr;
+    TextureManagerCreateTexture_fn Original_TextureManagerCreateTexture = nullptr;
+    TextureTransferFromImage_fn Original_TextureTransferFromImage = nullptr;
+    TexturePackGetImageResource_fn Original_AbstractTexturePackGetImageResource = nullptr;
+    TexturePackGetImageResource_fn Original_DLCTexturePackGetImageResource = nullptr;
     static int s_itemMineBlockHookCalls = 0;
     static void* s_currentLevel = nullptr;
     static thread_local void* s_activeUseLevel = nullptr;
@@ -123,6 +133,7 @@ namespace GameHooks
     static thread_local bool s_hasForcedBillboardRoute = false;
     static thread_local int s_forcedBillboardAtlas = -1;
     static thread_local int s_forcedBillboardPage = 0;
+    static thread_local int s_activeStitchAtlasType = -1;
     static int s_animatedTextureGuardLogCount = 0;
 
     struct TextureNameArrayNative
@@ -313,6 +324,14 @@ namespace GameHooks
             lower.push_back((wchar_t)towlower(c));
         }
         return lower;
+    }
+
+    static bool EndsWithPath(const std::wstring& path, const wchar_t* suffix)
+    {
+        size_t pathLen = path.size();
+        size_t suffLen = wcslen(suffix);
+        if (suffLen > pathLen) return false;
+        return path.compare(pathLen - suffLen, suffLen, suffix) == 0;
     }
 
     static int DetectAtlasTypeFromResource(void* resourcePtr)
@@ -1341,9 +1360,23 @@ namespace GameHooks
         return Original_HalfSlabCloneTileId ? Original_HalfSlabCloneTileId(thisPtr, level, x, y, z) : TryReadTileId(thisPtr);
     }
 
+    void __fastcall Hooked_PreStitchedTextureMapStitch(void* thisPtr)
+    {
+        const int prevAtlasType = s_activeStitchAtlasType;
+        int iconType = -1;
+        if (thisPtr && IsReadableRange(static_cast<const char*>(thisPtr) + 8, sizeof(int)))
+            iconType = *reinterpret_cast<const int*>(static_cast<const char*>(thisPtr) + 8);
+        s_activeStitchAtlasType = iconType;
+        if (Original_PreStitchedTextureMapStitch)
+            Original_PreStitchedTextureMapStitch(thisPtr);
+        s_activeStitchAtlasType = prevAtlasType;
+    }
+
     void __fastcall Hooked_LoadUVs(void* thisPtr)
     {
         LogUtil::Log("[WeaveLoader] Hooked_LoadUVs: ENTER (textureMap=%p)", thisPtr);
+        if (thisPtr && IsReadableRange(static_cast<const char*>(thisPtr) + 8, sizeof(int)))
+            s_activeStitchAtlasType = *reinterpret_cast<const int*>(static_cast<const char*>(thisPtr) + 8);
         if (Original_LoadUVs)
             Original_LoadUVs(thisPtr);
         LogUtil::Log("[WeaveLoader] Hooked_LoadUVs: original returned, creating mod icons");
@@ -1352,40 +1385,73 @@ namespace GameHooks
         LogUtil::Log("[WeaveLoader] Hooked_LoadUVs: DONE");
     }
 
+    static float ApplyAtlasScale(void* iconPtr, float value, bool isU, bool isModIcon)
+    {
+        if (isModIcon)
+            return value;
+
+        int atlasType = -1;
+        if (!ModAtlas::GetIconAtlasType(iconPtr, atlasType))
+        {
+            if (s_activeStitchAtlasType >= 0)
+                atlasType = s_activeStitchAtlasType;
+            else
+                return value;
+        }
+
+        float uScale = 1.0f;
+        float vScale = 1.0f;
+        if (!ModAtlas::GetAtlasScale(atlasType, uScale, vScale))
+            return value;
+
+        const float scale = isU ? uScale : vScale;
+        if (scale > 0.9995f && scale < 1.0005f)
+            return value;
+        return value * scale;
+    }
+
     float __fastcall Hooked_StitchedGetU0(void* thisPtr, bool adjust)
     {
         int atlasType = -1;
         int page = 0;
-        if (ModAtlas::TryGetIconRoute(thisPtr, atlasType, page) && atlasType == 0)
+        const bool isModIcon = ModAtlas::TryGetIconRoute(thisPtr, atlasType, page);
+        if (isModIcon && atlasType == 0 && page > 0)
             ModAtlas::NotifyIconSampled(thisPtr);
-        return Original_StitchedGetU0 ? Original_StitchedGetU0(thisPtr, adjust) : 0.0f;
+        float value = Original_StitchedGetU0 ? Original_StitchedGetU0(thisPtr, adjust) : 0.0f;
+        return ApplyAtlasScale(thisPtr, value, true, isModIcon);
     }
 
     float __fastcall Hooked_StitchedGetU1(void* thisPtr, bool adjust)
     {
         int atlasType = -1;
         int page = 0;
-        if (ModAtlas::TryGetIconRoute(thisPtr, atlasType, page) && atlasType == 0)
+        const bool isModIcon = ModAtlas::TryGetIconRoute(thisPtr, atlasType, page);
+        if (isModIcon && atlasType == 0 && page > 0)
             ModAtlas::NotifyIconSampled(thisPtr);
-        return Original_StitchedGetU1 ? Original_StitchedGetU1(thisPtr, adjust) : 0.0f;
+        float value = Original_StitchedGetU1 ? Original_StitchedGetU1(thisPtr, adjust) : 0.0f;
+        return ApplyAtlasScale(thisPtr, value, true, isModIcon);
     }
 
     float __fastcall Hooked_StitchedGetV0(void* thisPtr, bool adjust)
     {
         int atlasType = -1;
         int page = 0;
-        if (ModAtlas::TryGetIconRoute(thisPtr, atlasType, page) && atlasType == 0)
+        const bool isModIcon = ModAtlas::TryGetIconRoute(thisPtr, atlasType, page);
+        if (isModIcon && atlasType == 0 && page > 0)
             ModAtlas::NotifyIconSampled(thisPtr);
-        return Original_StitchedGetV0 ? Original_StitchedGetV0(thisPtr, adjust) : 0.0f;
+        float value = Original_StitchedGetV0 ? Original_StitchedGetV0(thisPtr, adjust) : 0.0f;
+        return ApplyAtlasScale(thisPtr, value, false, isModIcon);
     }
 
     float __fastcall Hooked_StitchedGetV1(void* thisPtr, bool adjust)
     {
         int atlasType = -1;
         int page = 0;
-        if (ModAtlas::TryGetIconRoute(thisPtr, atlasType, page) && atlasType == 0)
+        const bool isModIcon = ModAtlas::TryGetIconRoute(thisPtr, atlasType, page);
+        if (isModIcon && atlasType == 0 && page > 0)
             ModAtlas::NotifyIconSampled(thisPtr);
-        return Original_StitchedGetV1 ? Original_StitchedGetV1(thisPtr, adjust) : 0.0f;
+        float value = Original_StitchedGetV1 ? Original_StitchedGetV1(thisPtr, adjust) : 0.0f;
+        return ApplyAtlasScale(thisPtr, value, false, isModIcon);
     }
 
     void __fastcall Hooked_TexturesBindTextureResource(void* thisPtr, void* resourcePtr)
@@ -1498,19 +1564,152 @@ namespace GameHooks
         return Original_TexturesLoadTextureByIndex(thisPtr, idx);
     }
 
+    static bool IsModLoaderGeneratedPath(const std::wstring& lower)
+    {
+        return (lower.find(L"/mods/modloader/generated/") != std::wstring::npos) ||
+               (lower.find(L"/modloader/") != std::wstring::npos);
+    }
+
+    static std::wstring ToLowerSimple(const std::wstring& s)
+    {
+        std::wstring lower;
+        lower.reserve(s.size());
+        for (wchar_t ch : s)
+            lower.push_back((wchar_t)towlower(ch));
+        return lower;
+    }
+
+    static std::unordered_map<void*, std::wstring> s_textureNames;
+
+    void* __fastcall Hooked_TexturesReadImage(void* thisPtr, int texId, const std::wstring& name)
+    {
+        if (!Original_TexturesReadImage)
+            return nullptr;
+        void* img = Original_TexturesReadImage(thisPtr, texId, name);
+        if (!img)
+            return img;
+
+        std::wstring lower = NormalizeLowerPath(name);
+        if (IsModLoaderGeneratedPath(lower))
+            return img;
+
+        if (EndsWithPath(lower, L"terrain.png"))
+        {
+            ModAtlas::OverrideAtlasFromBufferedImage(0, img);
+        }
+        else if (EndsWithPath(lower, L"items.png"))
+        {
+            ModAtlas::OverrideAtlasFromBufferedImage(1, img);
+        }
+        return img;
+    }
+
+    void __fastcall Hooked_BufferedImageCtorFile(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive)
+    {
+        if (Original_BufferedImageCtorFile)
+            Original_BufferedImageCtorFile(thisPtr, file, filenameHasExtension, bTitleUpdateTexture, drive);
+
+        // Intentionally left empty: handled in Textures::readImage hook to avoid
+        // constructor-level crashes during boot.
+    }
+
+    void __fastcall Hooked_BufferedImageCtorDLCPack(void* thisPtr, void* dlcPack, const std::wstring& file, bool filenameHasExtension)
+    {
+        if (Original_BufferedImageCtorDLCPack)
+            Original_BufferedImageCtorDLCPack(thisPtr, dlcPack, file, filenameHasExtension);
+
+        // Intentionally left empty: handled in Textures::readImage hook to avoid
+        // constructor-level crashes during boot.
+    }
+
+    void* __fastcall Hooked_TextureManagerCreateTexture(void* thisPtr, const std::wstring& name, int mode, int width, int height, int wrap, int format, int minFilter, int magFilter, bool mipmap, void* image)
+    {
+        if (!Original_TextureManagerCreateTexture)
+            return nullptr;
+
+        void* tex = Original_TextureManagerCreateTexture(thisPtr, name, mode, width, height, wrap, format, minFilter, magFilter, mipmap, image);
+        if (tex)
+        {
+            std::wstring lower = ToLowerSimple(name);
+            if (lower == L"terrain" || lower == L"items")
+                s_textureNames[tex] = lower;
+        }
+        return tex;
+    }
+
+    void __fastcall Hooked_TextureTransferFromImage(void* thisPtr, void* image)
+    {
+        if (!Original_TextureTransferFromImage)
+            return;
+
+        auto it = s_textureNames.find(thisPtr);
+        if (it != s_textureNames.end() && image)
+        {
+            if (it->second == L"terrain")
+                ModAtlas::OverrideAtlasFromBufferedImage(0, image);
+            else if (it->second == L"items")
+                ModAtlas::OverrideAtlasFromBufferedImage(1, image);
+        }
+
+        Original_TextureTransferFromImage(thisPtr, image);
+    }
+
+    static void TryOverrideAtlasFromPackImage(const std::wstring& file, void* image)
+    {
+        if (!image) return;
+        std::wstring lower = NormalizeLowerPath(file);
+        if (IsModLoaderGeneratedPath(lower))
+            return;
+
+        if (EndsWithPath(lower, L"terrain.png"))
+        {
+            ModAtlas::OverrideAtlasFromBufferedImage(0, image);
+        }
+        else if (EndsWithPath(lower, L"items.png"))
+        {
+            ModAtlas::OverrideAtlasFromBufferedImage(1, image);
+        }
+    }
+
+    void* __fastcall Hooked_AbstractTexturePackGetImageResource(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive)
+    {
+        if (!Original_AbstractTexturePackGetImageResource)
+            return nullptr;
+        void* img = Original_AbstractTexturePackGetImageResource(thisPtr, file, filenameHasExtension, bTitleUpdateTexture, drive);
+        TryOverrideAtlasFromPackImage(file, img);
+        return img;
+    }
+
+    void* __fastcall Hooked_DLCTexturePackGetImageResource(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive)
+    {
+        if (!Original_DLCTexturePackGetImageResource)
+            return nullptr;
+        void* img = Original_DLCTexturePackGetImageResource(thisPtr, file, filenameHasExtension, bTitleUpdateTexture, drive);
+        TryOverrideAtlasFromPackImage(file, img);
+        return img;
+    }
+
     static int s_registerIconCallCount = 0;
 
     void* __fastcall Hooked_RegisterIcon(void* thisPtr, const std::wstring& name)
     {
         s_registerIconCallCount++;
+        int iconType = -1;
+        if (thisPtr && IsReadableRange(static_cast<const char*>(thisPtr) + 8, sizeof(int)))
+            iconType = *reinterpret_cast<const int*>(static_cast<const char*>(thisPtr) + 8);
+
         void* modIcon = ModAtlas::LookupModIcon(name);
         if (modIcon)
         {
+            if (iconType >= 0)
+                ModAtlas::NoteIconAtlasType(modIcon, iconType);
             LogUtil::Log("[WeaveLoader] registerIcon #%d: '%ls' -> MOD ICON %p",
                          s_registerIconCallCount, name.c_str(), modIcon);
             return modIcon;
         }
         void* result = Original_RegisterIcon ? Original_RegisterIcon(thisPtr, name) : nullptr;
+        if (result && iconType >= 0)
+            ModAtlas::NoteIconAtlasType(result, iconType);
         if (s_registerIconCallCount <= 30 || !result)
         {
             LogUtil::Log("[WeaveLoader] registerIcon #%d: '%ls' -> vanilla %p",
@@ -2034,37 +2233,58 @@ namespace GameHooks
     void* Hooked_GetResourceAsStream(const void* fileName)
     {
         const std::wstring* path = static_cast<const std::wstring*>(fileName);
-        if (ModAtlas::HasModTextures() && Original_GetResourceAsStream && path)
+        if (!Original_GetResourceAsStream || !path)
+            return Original_GetResourceAsStream ? Original_GetResourceAsStream(fileName) : nullptr;
+
+        int atlasType = -1;
+        int page = 0;
+        if (ParseVirtualAtlasRequest(*path, atlasType, page))
         {
-            std::string terrainPath = ModAtlas::GetMergedTerrainPath();
-            std::string itemsPath = ModAtlas::GetMergedItemsPath();
-            if (!terrainPath.empty() && path->find(L"terrain.png") != std::wstring::npos)
+            std::string atlasPath = ModAtlas::GetVirtualPagePath(atlasType, page);
+            if (atlasPath.empty())
+                atlasPath = ModAtlas::GetMergedPagePath(atlasType, page);
+            if (!atlasPath.empty())
             {
-                std::wstring ourPath(terrainPath.begin(), terrainPath.end());
-                LogUtil::Log("[WeaveLoader] getResourceAsStream: redirecting terrain.png to merged atlas");
+                std::wstring ourPath(atlasPath.begin(), atlasPath.end());
                 return Original_GetResourceAsStream(&ourPath);
             }
-            if (!itemsPath.empty() && path->find(L"items.png") != std::wstring::npos)
+        }
+
+        std::wstring lower = NormalizeLowerPath(*path);
+        const bool isGenerated =
+            (lower.find(L"/modloader/") != std::wstring::npos) ||
+            (lower.find(L"/mods/modloader/generated/") != std::wstring::npos);
+
+        if (!isGenerated)
+        {
+            if (EndsWithPath(lower, L"terrain.png"))
             {
-                std::wstring ourPath(itemsPath.begin(), itemsPath.end());
-                LogUtil::Log("[WeaveLoader] getResourceAsStream: redirecting items.png to merged atlas");
-                return Original_GetResourceAsStream(&ourPath);
-            }
-            int atlasType = -1;
-            int page = 0;
-            if (ParseVirtualAtlasRequest(*path, atlasType, page))
-            {
-                std::string atlasPath = ModAtlas::GetVirtualPagePath(atlasType, page);
-                if (atlasPath.empty())
-                    atlasPath = ModAtlas::GetMergedPagePath(atlasType, page);
-                if (!atlasPath.empty())
+                ModAtlas::SetOverrideAtlasPath(0, std::string(path->begin(), path->end()));
+                ModAtlas::EnsureAtlasesBuilt();
+                std::string terrainPath = ModAtlas::GetMergedTerrainPath();
+                if (!terrainPath.empty())
                 {
-                    std::wstring ourPath(atlasPath.begin(), atlasPath.end());
+                    std::wstring ourPath(terrainPath.begin(), terrainPath.end());
+                    LogUtil::Log("[WeaveLoader] getResourceAsStream: redirecting terrain.png to merged atlas");
+                    return Original_GetResourceAsStream(&ourPath);
+                }
+            }
+
+            if (EndsWithPath(lower, L"items.png"))
+            {
+                ModAtlas::SetOverrideAtlasPath(1, std::string(path->begin(), path->end()));
+                ModAtlas::EnsureAtlasesBuilt();
+                std::string itemsPath = ModAtlas::GetMergedItemsPath();
+                if (!itemsPath.empty())
+                {
+                    std::wstring ourPath(itemsPath.begin(), itemsPath.end());
+                    LogUtil::Log("[WeaveLoader] getResourceAsStream: redirecting items.png to merged atlas");
                     return Original_GetResourceAsStream(&ourPath);
                 }
             }
         }
-        return Original_GetResourceAsStream ? Original_GetResourceAsStream(fileName) : nullptr;
+
+        return Original_GetResourceAsStream(fileName);
     }
 
     static bool s_loggedGetString = false;
@@ -2134,6 +2354,7 @@ namespace GameHooks
         ModAtlas::SetVirtualAtlasDirectory(virtualAtlasDir);
 
         HMODULE hMod = nullptr;
+        std::string modsPath;
         if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&Hooked_MinecraftInit, &hMod) && hMod)
         {
             char dllPath[MAX_PATH] = { 0 };
@@ -2144,14 +2365,15 @@ namespace GameHooks
                 if (dllPos != std::string::npos)
                 {
                     dllDir.resize(dllPos + 1);
-                    std::string modsPath = dllDir + "mods";
-                    ModAtlas::BuildAtlases(modsPath, gameResPath);
+                    modsPath = dllDir + "mods";
                     goto atlas_done;
                 }
             }
         }
-        ModAtlas::BuildAtlases(base + "mods", gameResPath);
+        modsPath = base + "mods";
     atlas_done:
+        ModAtlas::SetBasePaths(modsPath, gameResPath);
+        ModAtlas::EnsureAtlasesBuilt();
 
         // Redirect terrain.png/items.png file opens to our merged atlases
         // so the game loads mod textures without modifying vanilla files.

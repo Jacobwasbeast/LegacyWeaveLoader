@@ -722,6 +722,79 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
+    if (symbols.pTexturesReadImage)
+    {
+        if (MH_CreateHook(symbols.pTexturesReadImage,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TexturesReadImage),
+                          reinterpret_cast<void**>(&GameHooks::Original_TexturesReadImage)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Textures::readImage");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Textures::readImage");
+        }
+    }
+
+    if (symbols.pTextureManagerCreateTexture)
+    {
+        if (MH_CreateHook(symbols.pTextureManagerCreateTexture,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TextureManagerCreateTexture),
+                          reinterpret_cast<void**>(&GameHooks::Original_TextureManagerCreateTexture)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook TextureManager::createTexture");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked TextureManager::createTexture");
+        }
+    }
+
+    if (symbols.pTextureTransferFromImage)
+    {
+        if (MH_CreateHook(symbols.pTextureTransferFromImage,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TextureTransferFromImage),
+                          reinterpret_cast<void**>(&GameHooks::Original_TextureTransferFromImage)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Texture::transferFromImage");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Texture::transferFromImage");
+        }
+    }
+
+    if (symbols.pAbstractTexturePackGetImageResource)
+    {
+        if (MH_CreateHook(symbols.pAbstractTexturePackGetImageResource,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_AbstractTexturePackGetImageResource),
+                          reinterpret_cast<void**>(&GameHooks::Original_AbstractTexturePackGetImageResource)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook AbstractTexturePack::getImageResource");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked AbstractTexturePack::getImageResource");
+        }
+    }
+
+    if (symbols.pDLCTexturePackGetImageResource)
+    {
+        if (MH_CreateHook(symbols.pDLCTexturePackGetImageResource,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_DLCTexturePackGetImageResource),
+                          reinterpret_cast<void**>(&GameHooks::Original_DLCTexturePackGetImageResource)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook DLCTexturePack::getImageResource");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked DLCTexturePack::getImageResource");
+        }
+    }
+
+    // BufferedImage constructor hooks disabled: the work is now handled in
+    // Textures::readImage for stability during boot.
+
     if (symbols.pStitchedGetU0)
     {
         if (MH_CreateHook(symbols.pStitchedGetU0,
@@ -789,6 +862,20 @@ bool HookManager::Install(const SymbolResolver& symbols)
         symbols.pLivingEntityGetViewVector,
         symbols.pEntityLerpMotion,
         symbols.pEntitySetPos);
+
+    if (symbols.pPreStitchedTextureMapStitch)
+    {
+        if (MH_CreateHook(symbols.pPreStitchedTextureMapStitch,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_PreStitchedTextureMapStitch),
+                          reinterpret_cast<void**>(&GameHooks::Original_PreStitchedTextureMapStitch)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook PreStitchedTextureMap::stitch");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked PreStitchedTextureMap::stitch (atlas type tracking)");
+        }
+    }
 
     if (symbols.pLoadUVs && symbols.pSimpleIconCtor && symbols.pOperatorNew)
     {

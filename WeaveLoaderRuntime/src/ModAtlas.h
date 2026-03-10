@@ -20,6 +20,21 @@ namespace ModAtlas
         int row, col;           // Grid position in atlas
     };
 
+    /// Set base paths used by the atlas builder (mods dir + game res dir).
+    void SetBasePaths(const std::string& modsPath, const std::string& gameResPath);
+
+    /// Optional: override the base atlas path for a specific type (0=terrain, 1=items).
+    /// Useful for texture packs that live outside the default res directory.
+    void SetOverrideAtlasPath(int atlasType, const std::string& path);
+
+    /// Capture a loaded BufferedImage as the base atlas, rebuild merged atlases,
+    /// and replace the BufferedImage contents with the merged atlas.
+    bool OverrideAtlasFromBufferedImage(int atlasType, void* bufferedImage);
+
+    /// Build atlases if needed. Returns true if mod atlases are available.
+    bool EnsureAtlasesBuilt();
+
+    /// Legacy entry point (kept for compatibility).
     /// Call before textures->stitch(). Returns path to generated dir, or empty if none.
     std::string BuildAtlases(const std::string& modsPath, const std::string& gameResPath);
     void SetVirtualAtlasDirectory(const std::string& dir);
@@ -67,6 +82,13 @@ namespace ModAtlas
     /// Look up a mod icon by name. Returns the SimpleIcon* or nullptr if not a mod icon.
     void* LookupModIcon(const std::wstring& name);
     bool TryGetIconRoute(void* iconPtr, int& outAtlasType, int& outPage);
+
+    /// Track atlas type for icons (vanilla + mod) so UV scaling can be applied.
+    void NoteIconAtlasType(void* iconPtr, int atlasType);
+    bool GetIconAtlasType(void* iconPtr, int& outAtlasType);
+
+    /// Query atlas UV scale for a given atlas type (used when atlas height expands).
+    bool GetAtlasScale(int atlasType, float& outUScale, float& outVScale);
 
     /// Called by icon UV hooks so bind hooks can route to the right page.
     void NotifyIconSampled(void* iconPtr);

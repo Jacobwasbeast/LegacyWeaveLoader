@@ -17,6 +17,7 @@ typedef void (WINAPI *OutputDebugStringA_fn)(const char* lpOutputString);
 typedef const wchar_t* (*GetString_fn)(int);
 typedef void* (*GetResourceAsStream_fn)(const void* fileName);
 typedef void (__fastcall *LoadUVs_fn)(void* thisPtr);
+typedef void (__fastcall *PreStitchedTextureMapStitch_fn)(void* thisPtr);
 typedef void* (__fastcall *RegisterIcon_fn)(void* thisPtr, const std::wstring& name);
 typedef void* (__fastcall *ItemInstanceGetIcon_fn)(void* thisPtr);
 typedef void (__fastcall *EntityRendererBindTextureResource_fn)(void* thisPtr, void* resourcePtr);
@@ -63,7 +64,13 @@ typedef void (__fastcall *AbstractContainerMenuBroadcastChanges_fn)(void* thisPt
 typedef void (__fastcall *TexturesBindTextureResource_fn)(void* thisPtr, void* resourcePtr);
 typedef int (__fastcall *TexturesLoadTextureByName_fn)(void* thisPtr, int texId, const std::wstring& resourceName);
 typedef int (__fastcall *TexturesLoadTextureByIndex_fn)(void* thisPtr, int idx);
+typedef void* (__fastcall *TexturesReadImage_fn)(void* thisPtr, int texId, const std::wstring& name);
 typedef float (__fastcall *StitchedTextureUV_fn)(void* thisPtr, bool adjust);
+typedef void (__fastcall *BufferedImageCtorFile_fn)(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive);
+typedef void (__fastcall *BufferedImageCtorDLCPack_fn)(void* thisPtr, void* dlcPack, const std::wstring& file, bool filenameHasExtension);
+typedef void* (__fastcall *TextureManagerCreateTexture_fn)(void* thisPtr, const std::wstring& name, int mode, int width, int height, int wrap, int format, int minFilter, int magFilter, bool mipmap, void* image);
+typedef void (__fastcall *TextureTransferFromImage_fn)(void* thisPtr, void* image);
+typedef void* (__fastcall *TexturePackGetImageResource_fn)(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive);
 
 namespace GameHooks
 {
@@ -78,6 +85,7 @@ namespace GameHooks
     extern GetString_fn           Original_GetString;
     extern GetResourceAsStream_fn Original_GetResourceAsStream;
     extern LoadUVs_fn             Original_LoadUVs;
+    extern PreStitchedTextureMapStitch_fn Original_PreStitchedTextureMapStitch;
     extern RegisterIcon_fn        Original_RegisterIcon;
     extern ItemInstanceGetIcon_fn Original_ItemInstanceGetIcon;
     extern EntityRendererBindTextureResource_fn Original_EntityRendererBindTextureResource;
@@ -128,10 +136,17 @@ namespace GameHooks
     extern TexturesBindTextureResource_fn Original_TexturesBindTextureResource;
     extern TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName;
     extern TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex;
+    extern TexturesReadImage_fn Original_TexturesReadImage;
     extern StitchedTextureUV_fn   Original_StitchedGetU0;
     extern StitchedTextureUV_fn   Original_StitchedGetU1;
     extern StitchedTextureUV_fn   Original_StitchedGetV0;
     extern StitchedTextureUV_fn   Original_StitchedGetV1;
+    extern BufferedImageCtorFile_fn Original_BufferedImageCtorFile;
+    extern BufferedImageCtorDLCPack_fn Original_BufferedImageCtorDLCPack;
+    extern TextureManagerCreateTexture_fn Original_TextureManagerCreateTexture;
+    extern TextureTransferFromImage_fn Original_TextureTransferFromImage;
+    extern TexturePackGetImageResource_fn Original_AbstractTexturePackGetImageResource;
+    extern TexturePackGetImageResource_fn Original_DLCTexturePackGetImageResource;
 
     void Hooked_RunStaticCtors();
     void __fastcall Hooked_MinecraftTick(void* thisPtr, bool bFirst, bool bUpdateTextures);
@@ -144,6 +159,7 @@ namespace GameHooks
     const wchar_t* Hooked_GetString(int id);
     void* Hooked_GetResourceAsStream(const void* fileName);
     void __fastcall Hooked_LoadUVs(void* thisPtr);
+    void __fastcall Hooked_PreStitchedTextureMapStitch(void* thisPtr);
     void* __fastcall Hooked_RegisterIcon(void* thisPtr, const std::wstring& name);
     void* __fastcall Hooked_ItemInstanceGetIcon(void* thisPtr);
     void __fastcall Hooked_EntityRendererBindTextureResource(void* thisPtr, void* resourcePtr);
@@ -194,10 +210,17 @@ namespace GameHooks
     void __fastcall Hooked_TexturesBindTextureResource(void* thisPtr, void* resourcePtr);
     int __fastcall Hooked_TexturesLoadTextureByName(void* thisPtr, int texId, const std::wstring& resourceName);
     int __fastcall Hooked_TexturesLoadTextureByIndex(void* thisPtr, int idx);
+    void* __fastcall Hooked_TexturesReadImage(void* thisPtr, int texId, const std::wstring& name);
     float __fastcall Hooked_StitchedGetU0(void* thisPtr, bool adjust);
     float __fastcall Hooked_StitchedGetU1(void* thisPtr, bool adjust);
     float __fastcall Hooked_StitchedGetV0(void* thisPtr, bool adjust);
     float __fastcall Hooked_StitchedGetV1(void* thisPtr, bool adjust);
+    void __fastcall Hooked_BufferedImageCtorFile(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive);
+    void __fastcall Hooked_BufferedImageCtorDLCPack(void* thisPtr, void* dlcPack, const std::wstring& file, bool filenameHasExtension);
+    void* __fastcall Hooked_TextureManagerCreateTexture(void* thisPtr, const std::wstring& name, int mode, int width, int height, int wrap, int format, int minFilter, int magFilter, bool mipmap, void* image);
+    void __fastcall Hooked_TextureTransferFromImage(void* thisPtr, void* image);
+    void* __fastcall Hooked_AbstractTexturePackGetImageResource(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive);
+    void* __fastcall Hooked_DLCTexturePackGetImageResource(void* thisPtr, const std::wstring& file, bool filenameHasExtension, bool bTitleUpdateTexture, const std::wstring& drive);
     void SetAtlasLocationPointers(void* blocksLocation, void* itemsLocation);
     void SetTileTilesArray(void* tilesArray);
     void SetSummonSymbols(void* levelAddEntity,

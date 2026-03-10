@@ -61,6 +61,7 @@ static const char* SYM_PRESENT              = "?Present@C4JRender@@QEAAXXZ";
 static const char* SYM_GET_STRING           = "?GetString@CMinecraftApp@@SAPEB_WH@Z";
 static const char* SYM_GET_RESOURCE_AS_STREAM = "?getResourceAsStream@InputStream@@SAPEAV1@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
 static const char* SYM_LOAD_UVS = "?loadUVs@PreStitchedTextureMap@@AEAAXXZ";
+static const char* SYM_PRESTITCHED_STITCH = "?stitch@PreStitchedTextureMap@@QEAAXXZ";
 static const char* SYM_SIMPLE_ICON_CTOR = "??0SimpleIcon@@QEAA@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@0MMMM@Z";
 static const char* SYM_OPERATOR_NEW = "??2@YAPEAX_K@Z";
 static const char* SYM_REGISTER_ICON = "?registerIcon@PreStitchedTextureMap@@UEAAPEAVIcon@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
@@ -115,10 +116,17 @@ static const char* SYM_TEXTURES_BIND_RESOURCE = "?bindTexture@Textures@@QEAAXPEA
 static const char* SYM_TEXTURES_LOAD_BY_NAME = "?loadTexture@Textures@@AEAAHW4_TEXTURE_NAME@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
 static const char* SYM_TEXTURES_LOAD_BY_INDEX_PUBLIC = "?loadTexture@Textures@@QEAAHH@Z";
 static const char* SYM_TEXTURES_LOAD_BY_INDEX_PRIVATE = "?loadTexture@Textures@@AEAAHH@Z";
+static const char* SYM_TEXTURES_READIMAGE = "?readImage@Textures@@QEAAPEAVBufferedImage@@W4_TEXTURE_NAME@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z";
 static const char* SYM_STITCHED_GETU0 = "?getU0@StitchedTexture@@UEBAM_N@Z";
 static const char* SYM_STITCHED_GETU1 = "?getU1@StitchedTexture@@UEBAM_N@Z";
 static const char* SYM_STITCHED_GETV0 = "?getV0@StitchedTexture@@UEBAM_N@Z";
 static const char* SYM_STITCHED_GETV1 = "?getV1@StitchedTexture@@UEBAM_N@Z";
+static const char* SYM_BUFFEREDIMAGE_CTOR_FILE = "??0BufferedImage@@QEAA@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@_N10@Z";
+static const char* SYM_BUFFEREDIMAGE_CTOR_DLC = "??0BufferedImage@@QEAA@PEAVDLCPack@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@_N@Z";
+static const char* SYM_TEXTUREMANAGER_CREATETEXTURE = "?createTexture@TextureManager@@QEAAPEAVTexture@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@HHHHHHH_NPEAVBufferedImage@@@Z";
+static const char* SYM_TEXTURE_TRANSFERFROMIMAGE = "?transferFromImage@Texture@@QEAAXPEAVBufferedImage@@@Z";
+static const char* SYM_ABSTRACT_TEXPACK_GETIMAGE = "?getImageResource@AbstractTexturePack@@UEAAPEAVBufferedImage@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@_N10@Z";
+static const char* SYM_DLC_TEXPACK_GETIMAGE = "?getImageResource@DLCTexturePack@@UEAAPEAVBufferedImage@@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@_N10@Z";
 static const char* SYM_MINECRAFT_SETLEVEL = "?setLevel@Minecraft@@QEAAXPEAVMultiPlayerLevel@@HV?$shared_ptr@VPlayer@@@std@@_N2@Z";
 static const char* SYM_LEVEL_ADDENTITY = "?addEntity@Level@@UEAA_NV?$shared_ptr@VEntity@@@std@@@Z";
 static const char* SYM_ENTITYIO_NEWBYID = "?newById@EntityIO@@SA?AV?$shared_ptr@VEntity@@@std@@HPEAVLevel@@@Z";
@@ -226,6 +234,9 @@ bool SymbolResolver::ResolveGameFunctions()
     }
     pGetResourceAsStream = Resolve(SYM_GET_RESOURCE_AS_STREAM);
     pLoadUVs             = Resolve(SYM_LOAD_UVS);
+    pPreStitchedTextureMapStitch = Resolve(SYM_PRESTITCHED_STITCH);
+    if (!pPreStitchedTextureMapStitch)
+        pPreStitchedTextureMapStitch = ResolveExactProcName(m_moduleBase, "PreStitchedTextureMap::stitch");
     pSimpleIconCtor      = Resolve(SYM_SIMPLE_ICON_CTOR);
     pOperatorNew         = Resolve(SYM_OPERATOR_NEW);
     pRegisterIcon        = Resolve(SYM_REGISTER_ICON);
@@ -287,10 +298,21 @@ bool SymbolResolver::ResolveGameFunctions()
     pTexturesLoadTextureByIndex = Resolve(SYM_TEXTURES_LOAD_BY_INDEX_PUBLIC);
     if (!pTexturesLoadTextureByIndex)
         pTexturesLoadTextureByIndex = Resolve(SYM_TEXTURES_LOAD_BY_INDEX_PRIVATE);
+    pTexturesReadImage = Resolve(SYM_TEXTURES_READIMAGE);
     pStitchedGetU0 = Resolve(SYM_STITCHED_GETU0);
     pStitchedGetU1 = Resolve(SYM_STITCHED_GETU1);
     pStitchedGetV0 = Resolve(SYM_STITCHED_GETV0);
     pStitchedGetV1 = Resolve(SYM_STITCHED_GETV1);
+    pBufferedImageCtorFile = Resolve(SYM_BUFFEREDIMAGE_CTOR_FILE);
+    pBufferedImageCtorDLCPack = Resolve(SYM_BUFFEREDIMAGE_CTOR_DLC);
+    pTextureManagerCreateTexture = Resolve(SYM_TEXTUREMANAGER_CREATETEXTURE);
+    pTextureTransferFromImage = Resolve(SYM_TEXTURE_TRANSFERFROMIMAGE);
+    pAbstractTexturePackGetImageResource = Resolve(SYM_ABSTRACT_TEXPACK_GETIMAGE);
+    if (!pAbstractTexturePackGetImageResource)
+        pAbstractTexturePackGetImageResource = ResolveExactProcName(m_moduleBase, "AbstractTexturePack::getImageResource");
+    pDLCTexturePackGetImageResource = Resolve(SYM_DLC_TEXPACK_GETIMAGE);
+    if (!pDLCTexturePackGetImageResource)
+        pDLCTexturePackGetImageResource = ResolveExactProcName(m_moduleBase, "DLCTexturePack::getImageResource");
     pMinecraftSetLevel = Resolve(SYM_MINECRAFT_SETLEVEL);
     pLevelAddEntity = Resolve(SYM_LEVEL_ADDENTITY);
     pEntityIONewById = Resolve(SYM_ENTITYIO_NEWBYID);
@@ -335,7 +357,13 @@ bool SymbolResolver::ResolveGameFunctions()
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandleA("vcruntime140d.dll"), SYM_OPERATOR_NEW);
     if (!pOperatorNew)   pOperatorNew = GetProcAddress(GetModuleHandle(nullptr), SYM_OPERATOR_NEW);
     if (!pSimpleIconCtor) PdbParser::DumpMatching("??0SimpleIcon@@");
+    if (!pBufferedImageCtorFile && !pBufferedImageCtorDLCPack) PdbParser::DumpMatching("??0BufferedImage@@");
+    if (!pTextureManagerCreateTexture) PdbParser::DumpMatching("createTexture@TextureManager");
+    if (!pTextureTransferFromImage) PdbParser::DumpMatching("transferFromImage@Texture");
+    if (!pAbstractTexturePackGetImageResource) PdbParser::DumpMatching("getImageResource@AbstractTexturePack");
+    if (!pDLCTexturePackGetImageResource) PdbParser::DumpMatching("getImageResource@DLCTexturePack");
     if (!pLoadUVs)        PdbParser::DumpMatching("loadUVs@PreStitchedTextureMap");
+    if (!pPreStitchedTextureMapStitch) PdbParser::DumpMatching("stitch@PreStitchedTextureMap");
 
     auto logSym = [](const char* name, void* ptr) {
         if (ptr)
@@ -354,6 +382,7 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("CMinecraftApp::GetString", pGetString);
     logSym("InputStream::getResourceAsStream", pGetResourceAsStream);
     logSym("PreStitchedTextureMap::loadUVs", pLoadUVs);
+    logSym("PreStitchedTextureMap::stitch", pPreStitchedTextureMapStitch);
     logSym("SimpleIcon::SimpleIcon", pSimpleIconCtor);
     logSym("operator new", pOperatorNew);
     logSym("registerIcon", pRegisterIcon);
@@ -407,10 +436,17 @@ bool SymbolResolver::ResolveGameFunctions()
     logSym("Textures::bindTexture(ResourceLocation)", pTexturesBindTextureResource);
     logSym("Textures::loadTexture(TEXTURE_NAME,wstring)", pTexturesLoadTextureByName);
     logSym("Textures::loadTexture(int)", pTexturesLoadTextureByIndex);
+    logSym("Textures::readImage(TEXTURE_NAME,wstring)", pTexturesReadImage);
     logSym("StitchedTexture::getU0", pStitchedGetU0);
     logSym("StitchedTexture::getU1", pStitchedGetU1);
     logSym("StitchedTexture::getV0", pStitchedGetV0);
     logSym("StitchedTexture::getV1", pStitchedGetV1);
+    logSym("BufferedImage::BufferedImage(file)", pBufferedImageCtorFile);
+    logSym("BufferedImage::BufferedImage(DLCPack)", pBufferedImageCtorDLCPack);
+    logSym("TextureManager::createTexture", pTextureManagerCreateTexture);
+    logSym("Texture::transferFromImage", pTextureTransferFromImage);
+    logSym("AbstractTexturePack::getImageResource", pAbstractTexturePackGetImageResource);
+    logSym("DLCTexturePack::getImageResource", pDLCTexturePackGetImageResource);
     logSym("Minecraft::setLevel", pMinecraftSetLevel);
     logSym("Level::addEntity", pLevelAddEntity);
     logSym("EntityIO::newById", pEntityIONewById);

@@ -20,6 +20,7 @@ public:
     void* pGetString = nullptr;            // CMinecraftApp::GetString(int)
     void* pGetResourceAsStream = nullptr;  // InputStream::getResourceAsStream(wstring)
     void* pLoadUVs = nullptr;              // PreStitchedTextureMap::loadUVs()
+    void* pPreStitchedTextureMapStitch = nullptr; // PreStitchedTextureMap::stitch()
     void* pSimpleIconCtor = nullptr;       // SimpleIcon::SimpleIcon(wstring,wstring,float*4)
     void* pOperatorNew = nullptr;          // global operator new(size_t) - for texture injection
     void* pRegisterIcon = nullptr;         // PreStitchedTextureMap::registerIcon(const wstring&)
@@ -73,10 +74,17 @@ public:
     void* pTexturesBindTextureResource = nullptr; // Textures::bindTexture(ResourceLocation*)
     void* pTexturesLoadTextureByName = nullptr;   // Textures::loadTexture(TEXTURE_NAME,const wstring&)
     void* pTexturesLoadTextureByIndex = nullptr;  // Textures::loadTexture(int)
+    void* pTexturesReadImage = nullptr;           // Textures::readImage(TEXTURE_NAME,const wstring&)
     void* pStitchedGetU0 = nullptr;       // StitchedTexture::getU0(bool) const
     void* pStitchedGetU1 = nullptr;       // StitchedTexture::getU1(bool) const
     void* pStitchedGetV0 = nullptr;       // StitchedTexture::getV0(bool) const
     void* pStitchedGetV1 = nullptr;       // StitchedTexture::getV1(bool) const
+    void* pBufferedImageCtorFile = nullptr;    // BufferedImage::BufferedImage(const wstring&,bool,bool,const wstring&)
+    void* pBufferedImageCtorDLCPack = nullptr; // BufferedImage::BufferedImage(DLCPack*,const wstring&,bool)
+    void* pTextureManagerCreateTexture = nullptr; // TextureManager::createTexture(wstring,int,int,int,int,int,int,int,bool,BufferedImage*)
+    void* pTextureTransferFromImage = nullptr;    // Texture::transferFromImage(BufferedImage*)
+    void* pAbstractTexturePackGetImageResource = nullptr; // AbstractTexturePack::getImageResource
+    void* pDLCTexturePackGetImageResource = nullptr;      // DLCTexturePack::getImageResource
     void* pMinecraftSetLevel = nullptr;   // Minecraft::setLevel(MultiPlayerLevel*,int,shared_ptr<Player>,bool,bool)
     void* pLevelAddEntity = nullptr;      // Level::addEntity(shared_ptr<Entity>)
     void* pEntityIONewById = nullptr;     // EntityIO::newById(int,Level*)
