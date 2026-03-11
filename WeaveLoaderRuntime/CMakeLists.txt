@@ -113,6 +113,7 @@ target_include_directories(WeaveLoaderRuntime PRIVATE
 target_link_libraries(WeaveLoaderRuntime PRIVATE
     minhook
     raw_pdb
+    bcrypt
 )
 
 if(EXISTS "${NETHOST_LIB}")
@@ -154,6 +155,7 @@ target_link_libraries(pdbdump PRIVATE
     raw_pdb
     Dbghelp
     OleAut32
+    bcrypt
 )
 
 target_include_directories(pdbdump PRIVATE

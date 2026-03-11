@@ -11,6 +11,7 @@ namespace WorldIdRemap
     void EnsureMissingPlaceholders();
     int RemapChunkBlockIds(void* chunkStoragePtr, void* levelChunkPtr, int chunkX, int chunkZ);
     void SaveChunkBlockNamespaces(void* chunkStoragePtr, void* levelChunkPtr);
+    void MarkChunkDirtyByBlockUpdate(int x, int z, int oldBlockId, int newBlockId);
     void TagModdedItemInstance(void* itemInstancePtr, void* compoundTagPtr);
     void RemapItemInstanceFromTag(void* itemInstancePtr, void* compoundTagPtr);
 }

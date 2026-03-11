@@ -7,6 +7,7 @@
 #include "PdbParser.h"
 
 #include <Windows.h>
+#include <cstdint>
 #include <cstddef>
 #include <fstream>
 #include <iomanip>
@@ -15,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -32,6 +34,7 @@ namespace
     constexpr unsigned char kTagCompoundId = 10;
     constexpr int kChunkWidth = 16;
     constexpr int kChunkMaxY = 256;
+    constexpr int kBlockModStart = 174;
 
     using TagNewTag_fn = void* (__fastcall *)(unsigned char type, const std::wstring& name);
     using LevelChunkGetTile_fn = int (__fastcall *)(void* thisPtr, int x, int y, int z);
@@ -70,6 +73,8 @@ namespace
     int s_chunkSaveLogCount = 0;
     int s_chunkIoLogCount = 0;
     std::mutex s_chunkMetaMutex;
+    std::mutex s_dirtyChunksMutex;
+    std::unordered_set<uint64_t> s_dirtyChunks;
 
     struct ChunkMeta
     {
@@ -78,6 +83,33 @@ namespace
         int z = 0;
     };
     std::unordered_map<void*, ChunkMeta> s_chunkMetaByPtr;
+
+    uint64_t MakeChunkKey(int x, int z)
+    {
+        return (static_cast<uint64_t>(static_cast<uint32_t>(x)) << 32) |
+               static_cast<uint32_t>(z);
+    }
+
+    void MarkChunkDirtyInternal(int x, int z)
+    {
+        const uint64_t key = MakeChunkKey(x, z);
+        std::lock_guard<std::mutex> lock(s_dirtyChunksMutex);
+        s_dirtyChunks.insert(key);
+    }
+
+    bool IsChunkDirtyInternal(int x, int z)
+    {
+        const uint64_t key = MakeChunkKey(x, z);
+        std::lock_guard<std::mutex> lock(s_dirtyChunksMutex);
+        return s_dirtyChunks.find(key) != s_dirtyChunks.end();
+    }
+
+    void ClearChunkDirtyInternal(int x, int z)
+    {
+        const uint64_t key = MakeChunkKey(x, z);
+        std::lock_guard<std::mutex> lock(s_dirtyChunksMutex);
+        s_dirtyChunks.erase(key);
+    }
     std::unordered_map<void*, std::unordered_map<int, std::string>> s_loadedNamespaceByChunk;
     std::unordered_map<std::string, std::unordered_map<int, std::string>> s_chunkNamespaceCache;
 
@@ -821,6 +853,19 @@ namespace WorldIdRemap
 #endif
     }
 
+    void MarkChunkDirtyByBlockUpdate(int x, int z, int oldBlockId, int newBlockId)
+    {
+        if (oldBlockId == newBlockId)
+            return;
+        if (oldBlockId < 0 && newBlockId < 0)
+            return;
+        const bool oldIsMod = (oldBlockId >= kBlockModStart && oldBlockId <= 255);
+        const bool newIsMod = (newBlockId >= kBlockModStart && newBlockId <= 255);
+        if (!oldIsMod && !newIsMod)
+            return;
+        MarkChunkDirtyInternal(x >> 4, z >> 4);
+    }
+
     void SaveChunkBlockNamespaces(void* chunkStoragePtr, void* levelChunkPtr)
     {
         if (!chunkStoragePtr || !levelChunkPtr || !s_levelChunkGetTile)
@@ -845,6 +890,9 @@ namespace WorldIdRemap
         const std::string cacheKey = MakeChunkCacheKey(storage, meta.x, meta.z);
         std::unordered_map<int, std::string> loadedEntries;
         const bool hadLoadedMap = TryGetLoadedChunkNamespaces(levelChunkPtr, &loadedEntries) && !loadedEntries.empty();
+        const bool isDirty = IsChunkDirtyInternal(meta.x, meta.z);
+        if (!isDirty && !hadLoadedMap)
+            return;
 
         std::unordered_map<int, std::string> nextEntries;
         const int missingBlockFallback = IdRegistry::Instance().GetMissingFallback(IdRegistry::Type::Block);
@@ -900,13 +948,18 @@ namespace WorldIdRemap
         }
 
         if (nextEntries.empty() && !hadLoadedMap)
+        {
+            if (isDirty)
+                ClearChunkDirtyInternal(meta.x, meta.z);
             return;
+        }
         if (!WriteChunkNamespaceMap(storage->saveFile, path, nextEntries))
             return;
         {
             std::lock_guard<std::mutex> lock(s_chunkMetaMutex);
             s_chunkNamespaceCache[cacheKey] = nextEntries;
         }
+        ClearChunkDirtyInternal(meta.x, meta.z);
 
         if (s_chunkSaveLogCount < 64)
         {

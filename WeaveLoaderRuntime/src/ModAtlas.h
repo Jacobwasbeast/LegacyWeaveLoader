@@ -39,6 +39,7 @@ namespace ModAtlas
     /// Call before textures->stitch(). Returns path to generated dir, or empty if none.
     std::string BuildAtlases(const std::string& modsPath, const std::string& gameResPath);
     void SetVirtualAtlasDirectory(const std::string& dir);
+    void PollAsyncBuild();
 
     /// Get path to merged terrain.png (if built)
     std::string GetMergedTerrainPath();

@@ -1,10 +1,13 @@
 #include "PdbParser.h"
 #include <Windows.h>
+#include <bcrypt.h>
 #include <DbgHelp.h>
 #include <OleAuto.h>
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -16,6 +19,19 @@ namespace
 #ifndef SymTagData
     constexpr DWORD SymTagData = 7;
 #endif
+    struct FileFingerprint
+    {
+        std::string path;
+        uint64_t size = 0;
+        uint64_t mtime = 0;
+        std::string sha256;
+        bool ok = false;
+    };
+
+    uint64_t FileTimeToUint64(const FILETIME& ft)
+    {
+        return (static_cast<uint64_t>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+    }
     std::string Trim(const std::string& s)
     {
         size_t start = 0;
@@ -55,6 +71,114 @@ namespace
         if (UnDecorateSymbolName(decorated.c_str(), buffer, sizeof(buffer), UNDNAME_COMPLETE) == 0)
             return decorated;
         return std::string(buffer);
+    }
+
+    bool ComputeSha256(HANDLE file, std::string& outHex)
+    {
+        if (file == INVALID_HANDLE_VALUE)
+            return false;
+        BCRYPT_ALG_HANDLE hAlg = nullptr;
+        BCRYPT_HASH_HANDLE hHash = nullptr;
+        DWORD hashObjectSize = 0;
+        DWORD hashSize = 0;
+        DWORD cbData = 0;
+        std::vector<unsigned char> hashObject;
+        std::vector<unsigned char> hashBytes;
+
+        if (BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0)
+            return false;
+
+        if (BCryptGetProperty(hAlg, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&hashObjectSize),
+                              sizeof(DWORD), &cbData, 0) != 0)
+        {
+            BCryptCloseAlgorithmProvider(hAlg, 0);
+            return false;
+        }
+        if (BCryptGetProperty(hAlg, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashSize),
+                              sizeof(DWORD), &cbData, 0) != 0)
+        {
+            BCryptCloseAlgorithmProvider(hAlg, 0);
+            return false;
+        }
+
+        hashObject.resize(hashObjectSize);
+        hashBytes.resize(hashSize);
+
+        if (BCryptCreateHash(hAlg, &hHash, hashObject.data(), hashObjectSize, nullptr, 0, 0) != 0)
+        {
+            BCryptCloseAlgorithmProvider(hAlg, 0);
+            return false;
+        }
+
+        if (SetFilePointer(file, 0, nullptr, FILE_BEGIN) == INVALID_SET_FILE_POINTER)
+        {
+            BCryptDestroyHash(hHash);
+            BCryptCloseAlgorithmProvider(hAlg, 0);
+            return false;
+        }
+
+        unsigned char buffer[1 << 16];
+        DWORD bytesRead = 0;
+        while (ReadFile(file, buffer, sizeof(buffer), &bytesRead, nullptr) && bytesRead > 0)
+        {
+            if (BCryptHashData(hHash, buffer, bytesRead, 0) != 0)
+            {
+                BCryptDestroyHash(hHash);
+                BCryptCloseAlgorithmProvider(hAlg, 0);
+                return false;
+            }
+        }
+
+        if (BCryptFinishHash(hHash, hashBytes.data(), hashSize, 0) != 0)
+        {
+            BCryptDestroyHash(hHash);
+            BCryptCloseAlgorithmProvider(hAlg, 0);
+            return false;
+        }
+
+        BCryptDestroyHash(hHash);
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+
+        std::ostringstream oss;
+        oss.setf(std::ios::hex, std::ios::basefield);
+        oss.fill('0');
+        for (unsigned char b : hashBytes)
+            oss << std::setw(2) << static_cast<int>(b);
+        outHex = oss.str();
+        return true;
+    }
+
+    bool GetFileFingerprint(const char* path, FileFingerprint& out)
+    {
+        if (!path || !*path)
+            return false;
+        out.path = path;
+        HANDLE hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                   nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hFile == INVALID_HANDLE_VALUE)
+            return false;
+
+        LARGE_INTEGER size{};
+        FILETIME ft{};
+        if (!GetFileSizeEx(hFile, &size) || !GetFileTime(hFile, nullptr, nullptr, &ft))
+        {
+            CloseHandle(hFile);
+            return false;
+        }
+
+        out.size = static_cast<uint64_t>(size.QuadPart);
+        out.mtime = FileTimeToUint64(ft);
+        out.ok = ComputeSha256(hFile, out.sha256);
+        CloseHandle(hFile);
+        return out.ok;
+    }
+
+    std::string GetDirName(const std::string& path)
+    {
+        const size_t pos = path.find_last_of("\\/");
+        if (pos == std::string::npos)
+            return std::string();
+        return path.substr(0, pos);
     }
 
     struct TypeInfo
@@ -319,6 +443,56 @@ namespace
             }
         }
         out << '"';
+    }
+
+    void WriteFingerprint(std::ostream& out, const char* label, const char* path, const FileFingerprint& fp)
+    {
+        out << "  \"" << label << "\": {\n";
+        out << "    \"path\": ";
+        WriteJsonString(out, path ? path : "");
+        out << ",\n";
+        out << "    \"sha256\": ";
+        WriteJsonString(out, fp.ok ? fp.sha256 : "");
+        out << ",\n";
+        out << "    \"size\": " << (fp.ok ? fp.size : 0) << ",\n";
+        out << "    \"mtime\": " << (fp.ok ? fp.mtime : 0) << ",\n";
+        out << "    \"ok\": " << (fp.ok ? "true" : "false") << "\n";
+        out << "  }";
+    }
+
+    bool WriteMetadataJson(const std::string& outPath,
+                           const char* pdbPath,
+                           const char* exePath,
+                           const char* mappingPath,
+                           const char* offsetsPath)
+    {
+        std::ofstream out(outPath, std::ios::out | std::ios::trunc);
+        if (!out.is_open())
+            return false;
+
+        FileFingerprint pdbFp{};
+        FileFingerprint exeFp{};
+        if (pdbPath)
+            GetFileFingerprint(pdbPath, pdbFp);
+        if (exePath)
+            GetFileFingerprint(exePath, exeFp);
+
+        out << "{\n";
+        out << "  \"format\": 1,\n";
+        out << "  \"mappingJson\": ";
+        WriteJsonString(out, mappingPath ? mappingPath : "");
+        out << ",\n";
+        out << "  \"offsetsJson\": ";
+        WriteJsonString(out, offsetsPath ? offsetsPath : "");
+        out << ",\n";
+        WriteFingerprint(out, "pdb", pdbPath, pdbFp);
+        if (exePath && *exePath)
+        {
+            out << ",\n";
+            WriteFingerprint(out, "gameExe", exePath, exeFp);
+        }
+        out << "\n}\n";
+        return true;
     }
 }
 
@@ -614,5 +788,14 @@ int main(int argc, char** argv)
         else
             std::cout << "Failed to write " << offsetsOut << "\n";
     }
+
+    const std::string outDir = GetDirName(outPath);
+    const std::string metadataPath = outDir.empty()
+        ? std::string("metadata.json")
+        : (outDir + "\\metadata.json");
+    if (WriteMetadataJson(metadataPath, pdbPath, offsetsExe, outPath, offsetsOut))
+        std::cout << "Wrote " << metadataPath << "\n";
+    else
+        std::cout << "Failed to write " << metadataPath << "\n";
     return 0;
 }

@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace WeaveLoader.Launcher;
 
 class Program
 {
     private const string RuntimeDllName = "WeaveLoaderRuntime.dll";
+    private const string MetadataFileName = "metadata.json";
 
     [STAThread]
     static int Main(string[] args)
@@ -63,8 +66,24 @@ class Program
                 Console.WriteLine($"Saved game path to {configFile}");
             }
 
+            string metadataPath = Path.Combine(metadataDir, MetadataFileName);
+            string offsetsPath = Path.Combine(metadataDir, "offsets.json");
+
+            if (File.Exists(metadataPath))
+            {
+                if (TryReadMetadataSha(metadataPath, out string expectedSha) &&
+                    TryGetFileSha256(config.GameExePath, out string actualSha) &&
+                    !string.Equals(expectedSha, actualSha, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("[WARN] metadata.json does not match game executable. Removing stale metadata.");
+                    SafeDelete(metadataPath);
+                    SafeDelete(mappingPath);
+                    SafeDelete(offsetsPath);
+                }
+            }
+
             bool mappingMissing = !File.Exists(mappingPath);
-            bool offsetsMissing = !File.Exists(Path.Combine(metadataDir, "offsets.json"));
+            bool offsetsMissing = !File.Exists(offsetsPath);
 
             if (mappingMissing || offsetsMissing)
             {
@@ -72,7 +91,6 @@ class Program
                     Directory.CreateDirectory(metadataDir);
 
                 string pdbPath = Path.ChangeExtension(config.GameExePath, ".pdb") ?? "";
-                string offsetsPath = Path.Combine(metadataDir, "offsets.json");
                 if (!File.Exists(pdbDumpExe))
                 {
                     Console.WriteLine($"[WARN] pdbdump.exe not found at {pdbDumpExe} (mapping.json will not be generated)");
@@ -150,6 +168,56 @@ class Program
             Console.WriteLine("Press any key to exit.");
             Console.ReadKey(true);
             return 1;
+        }
+    }
+
+    private static bool TryReadMetadataSha(string metadataPath, out string sha)
+    {
+        sha = "";
+        try
+        {
+            using var stream = File.OpenRead(metadataPath);
+            using var doc = JsonDocument.Parse(stream);
+            if (!doc.RootElement.TryGetProperty("gameExe", out var gameExe))
+                return false;
+            if (!gameExe.TryGetProperty("sha256", out var shaProp))
+                return false;
+            sha = shaProp.GetString() ?? "";
+            return !string.IsNullOrWhiteSpace(sha);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetFileSha256(string path, out string sha)
+    {
+        sha = "";
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var sha256 = SHA256.Create();
+            byte[] hash = sha256.ComputeHash(stream);
+            sha = Convert.ToHexString(hash).ToLowerInvariant();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void SafeDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Failed to delete {path}: {ex.Message}");
         }
     }
 }

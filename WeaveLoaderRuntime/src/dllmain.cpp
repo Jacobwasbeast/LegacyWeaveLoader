@@ -1,6 +1,11 @@
 #include <Windows.h>
+#include <bcrypt.h>
 #include <cstdio>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <string>
+#include <vector>
 #include "LogUtil.h"
 #include "CrashHandler.h"
 #include "PdbParser.h"
@@ -23,6 +28,185 @@ static std::string GetDllDirectory(HMODULE hModule)
     return ".\\";
 }
 
+static bool ReadFileToString(const std::string& path, std::string& out)
+{
+    std::ifstream in(path, std::ios::in | std::ios::binary);
+    if (!in.is_open())
+        return false;
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    out = ss.str();
+    return true;
+}
+
+static bool ComputeSha256File(const char* path, std::string& outHex)
+{
+    if (!path || !*path)
+        return false;
+    HANDLE hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE)
+        return false;
+
+    BCRYPT_ALG_HANDLE hAlg = nullptr;
+    BCRYPT_HASH_HANDLE hHash = nullptr;
+    DWORD hashObjectSize = 0;
+    DWORD hashSize = 0;
+    DWORD cbData = 0;
+    std::vector<unsigned char> hashObject;
+    std::vector<unsigned char> hashBytes;
+
+    if (BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0)
+    {
+        CloseHandle(hFile);
+        return false;
+    }
+
+    if (BCryptGetProperty(hAlg, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&hashObjectSize),
+                          sizeof(DWORD), &cbData, 0) != 0 ||
+        BCryptGetProperty(hAlg, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashSize),
+                          sizeof(DWORD), &cbData, 0) != 0)
+    {
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        CloseHandle(hFile);
+        return false;
+    }
+
+    hashObject.resize(hashObjectSize);
+    hashBytes.resize(hashSize);
+    if (BCryptCreateHash(hAlg, &hHash, hashObject.data(), hashObjectSize, nullptr, 0, 0) != 0)
+    {
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        CloseHandle(hFile);
+        return false;
+    }
+
+    unsigned char buffer[1 << 16];
+    DWORD bytesRead = 0;
+    while (ReadFile(hFile, buffer, sizeof(buffer), &bytesRead, nullptr) && bytesRead > 0)
+    {
+        if (BCryptHashData(hHash, buffer, bytesRead, 0) != 0)
+        {
+            BCryptDestroyHash(hHash);
+            BCryptCloseAlgorithmProvider(hAlg, 0);
+            CloseHandle(hFile);
+            return false;
+        }
+    }
+
+    if (BCryptFinishHash(hHash, hashBytes.data(), hashSize, 0) != 0)
+    {
+        BCryptDestroyHash(hHash);
+        BCryptCloseAlgorithmProvider(hAlg, 0);
+        CloseHandle(hFile);
+        return false;
+    }
+
+    BCryptDestroyHash(hHash);
+    BCryptCloseAlgorithmProvider(hAlg, 0);
+    CloseHandle(hFile);
+
+    std::ostringstream oss;
+    oss.setf(std::ios::hex, std::ios::basefield);
+    oss.fill('0');
+    for (unsigned char b : hashBytes)
+        oss << std::setw(2) << static_cast<int>(b);
+    outHex = oss.str();
+    return true;
+}
+
+static bool ExtractGameExeSha256(const std::string& json, std::string& outSha)
+{
+    const std::string gameExeKey = "\"gameExe\"";
+    const std::string shaKey = "\"sha256\"";
+    size_t gamePos = json.find(gameExeKey);
+    if (gamePos == std::string::npos)
+        return false;
+    size_t shaPos = json.find(shaKey, gamePos);
+    if (shaPos == std::string::npos)
+        return false;
+    size_t colon = json.find(':', shaPos);
+    if (colon == std::string::npos)
+        return false;
+    size_t quote1 = json.find('"', colon + 1);
+    if (quote1 == std::string::npos)
+        return false;
+    size_t quote2 = json.find('"', quote1 + 1);
+    if (quote2 == std::string::npos || quote2 <= quote1 + 1)
+        return false;
+    outSha = json.substr(quote1 + 1, quote2 - quote1 - 1);
+    return !outSha.empty();
+}
+
+static std::string ToLowerAscii(std::string value)
+{
+    for (char& c : value)
+        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return value;
+}
+
+static void RemoveStaleMetadata(const std::string& baseDir)
+{
+    const std::string metaDir = baseDir + "metadata\\";
+    const char* files[] = {
+        "mapping.json",
+        "offsets.json",
+        "metadata.json"
+    };
+    for (const char* name : files)
+    {
+        std::string path = metaDir + name;
+        if (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES)
+        {
+            if (DeleteFileA(path.c_str()) == 0)
+                LogUtil::Log("[WeaveLoader] Warning: failed to delete stale %s", path.c_str());
+            else
+                LogUtil::Log("[WeaveLoader] Deleted stale %s", path.c_str());
+        }
+    }
+
+    const char* rootFiles[] = {
+        "mapping.json",
+        "offsets.json"
+    };
+    for (const char* name : rootFiles)
+    {
+        std::string path = baseDir + name;
+        if (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES)
+        {
+            if (DeleteFileA(path.c_str()) == 0)
+                LogUtil::Log("[WeaveLoader] Warning: failed to delete stale %s", path.c_str());
+            else
+                LogUtil::Log("[WeaveLoader] Deleted stale %s", path.c_str());
+        }
+    }
+}
+
+static void ValidateMetadataForExecutable(const std::string& baseDir, const char* exePath)
+{
+    const std::string metadataPath = baseDir + "metadata\\metadata.json";
+    if (GetFileAttributesA(metadataPath.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return;
+
+    std::string json;
+    if (!ReadFileToString(metadataPath, json))
+        return;
+
+    std::string expectedSha;
+    if (!ExtractGameExeSha256(json, expectedSha))
+        return;
+
+    std::string actualSha;
+    if (!ComputeSha256File(exePath, actualSha))
+        return;
+
+    if (ToLowerAscii(expectedSha) != ToLowerAscii(actualSha))
+    {
+        LogUtil::Log("[WeaveLoader] Metadata mismatch: game executable hash does not match metadata.json. Removing stale mappings/offsets.");
+        RemoveStaleMetadata(baseDir);
+    }
+}
+
 DWORD WINAPI InitThread(LPVOID lpParam)
 {
     LogUtil::Log("[WeaveLoader] InitThread started (module=%p)", g_hModule);
@@ -33,13 +217,6 @@ DWORD WINAPI InitThread(LPVOID lpParam)
     std::string baseDir = GetDllDirectory(g_hModule);
     LogUtil::Log("[WeaveLoader] Runtime DLL directory: %s", baseDir.c_str());
 
-    std::string mappingPath = baseDir + "metadata\\mapping.json";
-    if (!SymbolRegistry::Instance().LoadFromFile(mappingPath.c_str()))
-    {
-        std::string fallbackPath = baseDir + "mapping.json";
-        SymbolRegistry::Instance().LoadFromFile(fallbackPath.c_str());
-    }
-
     char cwd[MAX_PATH] = {0};
     GetCurrentDirectoryA(MAX_PATH, cwd);
     LogUtil::Log("[WeaveLoader] Game working directory: %s", cwd);
@@ -47,6 +224,15 @@ DWORD WINAPI InitThread(LPVOID lpParam)
     char exePath[MAX_PATH] = {0};
     GetModuleFileNameA(nullptr, exePath, MAX_PATH);
     LogUtil::Log("[WeaveLoader] Host executable: %s", exePath);
+
+    ValidateMetadataForExecutable(baseDir, exePath);
+
+    std::string mappingPath = baseDir + "metadata\\mapping.json";
+    if (!SymbolRegistry::Instance().LoadFromFile(mappingPath.c_str()))
+    {
+        std::string fallbackPath = baseDir + "mapping.json";
+        SymbolRegistry::Instance().LoadFromFile(fallbackPath.c_str());
+    }
 
     SymbolResolver symbols;
     if (!symbols.Initialize())

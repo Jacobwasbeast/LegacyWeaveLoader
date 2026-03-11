@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <MinHook.h>
 #include <algorithm>
+#include <atomic>
 #include <cwctype>
 #include <cstring>
 #include <cstdlib>
@@ -11,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <thread>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -59,7 +61,10 @@ namespace ModAtlas
     static thread_local bool s_hasPendingPage = false;
     static thread_local int s_pendingAtlasType = -1;
     static thread_local int s_pendingPage = 0;
-    static thread_local bool s_buildInProgress = false;
+    static std::atomic<bool> s_buildInProgress{false};
+    static std::atomic<bool> s_asyncBuildQueued{false};
+    static std::atomic<bool> s_asyncBuildComplete{false};
+    static bool s_createFileHookInstalled = false;
     static bool s_applyMergedToBufferedImage = false;
 
     static constexpr int kTerrainGridCols = 16;
@@ -85,6 +90,11 @@ namespace ModAtlas
         return s_maxPixels;
     }
 
+    static std::string BuildAtlasesInternal(const std::string& modsPath,
+                                            const std::string& terrainBasePath,
+                                            const std::string& itemsBasePath);
+    static void RefreshMergedPaths();
+
     static bool IsReservedTerrainCell(int row, int col)
     {
         if (row < 0 || col < 0 || col >= kTerrainGridCols)
@@ -93,6 +103,31 @@ namespace ModAtlas
             ? s_terrainBaseRows
             : kReservedTerrainRows;
         return row < reserveRows;
+    }
+
+    static bool IsAsyncAtlasEnabled()
+    {
+        return true;
+    }
+
+    static void StartAsyncBuild(const std::string& terrainPath, const std::string& itemsPath)
+    {
+        if (s_asyncBuildQueued.load())
+            return;
+        s_asyncBuildQueued = true;
+        s_buildInProgress = true;
+        LogUtil::Log("[WeaveLoader] ModAtlas: starting async build");
+
+        const std::string modsPath = s_modsPath;
+        std::thread([modsPath, terrainPath, itemsPath]()
+        {
+            BuildAtlasesInternal(modsPath, terrainPath, itemsPath);
+            s_lastTerrainBasePath = terrainPath;
+            s_lastItemsBasePath = itemsPath;
+            s_buildInProgress = false;
+            s_asyncBuildComplete = true;
+            LogUtil::Log("[WeaveLoader] ModAtlas: async build complete");
+        }).detach();
     }
 
     // CreateFileW hook: redirect game file opens to merged atlases
@@ -818,12 +853,17 @@ namespace ModAtlas
     {
         s_modsPath = modsPath;
         s_gameResPath = gameResPath;
+        s_asyncBuildQueued = false;
+        s_asyncBuildComplete = false;
+        s_buildInProgress = false;
     }
 
     void SetOverrideAtlasPath(int atlasType, const std::string& path)
     {
         if (atlasType == 0) s_overrideTerrainPath = path;
         else if (atlasType == 1) s_overrideItemsPath = path;
+        s_asyncBuildQueued = false;
+        s_asyncBuildComplete = false;
     }
 
     static void UpdateLastBaseDims(int atlasType, int w, int h)
@@ -1065,10 +1105,26 @@ namespace ModAtlas
 
     bool EnsureAtlasesBuilt()
     {
-        if (s_buildInProgress)
+        if (s_buildInProgress.load())
             return s_hasModTextures;
         if (s_modsPath.empty() || s_gameResPath.empty())
             return false;
+
+        if (IsAsyncAtlasEnabled() && !s_applyMergedToBufferedImage)
+        {
+            if (s_asyncBuildComplete.load())
+                return s_hasModTextures;
+
+            std::string terrainPath = !s_overrideTerrainPath.empty()
+                ? s_overrideTerrainPath
+                : (s_gameResPath + "\\terrain.png");
+            std::string itemsPath = !s_overrideItemsPath.empty()
+                ? s_overrideItemsPath
+                : (s_gameResPath + "\\items.png");
+
+            StartAsyncBuild(terrainPath, itemsPath);
+            return s_hasModTextures;
+        }
 
         s_buildInProgress = true;
 
@@ -1168,19 +1224,37 @@ namespace ModAtlas
             CreateDirectoryA(s_virtualAtlasDir.c_str(), nullptr);
     }
 
+    void PollAsyncBuild()
+    {
+        if (!IsAsyncAtlasEnabled())
+            return;
+        if (!s_asyncBuildComplete.exchange(false))
+            return;
+
+        RefreshMergedPaths();
+        InstallCreateFileHook(s_gameResPath);
+        LogUtil::Log("[WeaveLoader] ModAtlas: async build applied");
+    }
+
     std::string GetMergedTerrainPath()
     {
+        if (s_buildInProgress.load())
+            return "";
         return s_hasTerrainPage0Mods ? GetMergedPagePath(0, 0) : "";
     }
 
     std::string GetMergedItemsPath()
     {
+        if (s_buildInProgress.load())
+            return "";
         // Never replace vanilla items page 0 unless explicitly needed.
         return s_hasItemsPage0Mods ? GetMergedPagePath(1, 0) : "";
     }
 
     std::string GetMergedPagePath(int atlasType, int page)
     {
+        if (s_buildInProgress.load())
+            return "";
         if (s_mergedDir.empty() || page < 0) return "";
         if (atlasType == 0)
         {
@@ -1193,6 +1267,8 @@ namespace ModAtlas
 
     std::string GetMergedMipmapPath(int atlasType, int mipLevel)
     {
+        if (s_buildInProgress.load())
+            return "";
         if (s_mergedDir.empty() || mipLevel <= 1)
             return "";
         const char* stem = (atlasType == 0) ? "terrain" : "items";
@@ -1204,6 +1280,8 @@ namespace ModAtlas
 
     std::string GetVirtualPagePath(int atlasType, int page)
     {
+        if (s_buildInProgress.load())
+            return "";
         if (s_virtualAtlasDir.empty() || page < 0) return "";
         if (atlasType == 0)
             return BuildVirtualPageOutputPath(s_virtualAtlasDir, "terrain", page);
@@ -1222,7 +1300,7 @@ namespace ModAtlas
 
     const std::vector<ModTextureEntry>& GetBlockEntries() { return s_blockEntries; }
     const std::vector<ModTextureEntry>& GetItemEntries() { return s_itemEntries; }
-    bool HasModTextures() { return s_hasModTextures; }
+    bool HasModTextures() { return s_buildInProgress.load() ? false : s_hasModTextures; }
 
     void NoteIconAtlasType(void* iconPtr, int atlasType)
     {
@@ -1320,12 +1398,26 @@ namespace ModAtlas
         return true;
     }
 
+    static void RefreshMergedPaths()
+    {
+        const std::string mergedTerrain = GetMergedTerrainPath();
+        const std::string mergedItems = GetMergedItemsPath();
+        if (!mergedTerrain.empty())
+            s_mergedTerrainW = std::wstring(mergedTerrain.begin(), mergedTerrain.end());
+        else
+            s_mergedTerrainW.clear();
+        if (!mergedItems.empty())
+            s_mergedItemsW = std::wstring(mergedItems.begin(), mergedItems.end());
+        else
+            s_mergedItemsW.clear();
+    }
+
     static HANDLE WINAPI Hooked_CreateFileW(
         LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
         LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
         DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
     {
-        if (s_buildInProgress)
+        if (s_buildInProgress.load())
         {
             return s_originalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode,
                 lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
@@ -1372,11 +1464,13 @@ namespace ModAtlas
 
     bool InstallCreateFileHook(const std::string& gameResPath)
     {
-        if (!s_hasModTextures) return false;
+        if (s_createFileHookInstalled)
+            return true;
+        if (!s_hasModTextures && !s_buildInProgress.load()) return false;
 
         std::string mergedTerrain = GetMergedTerrainPath();
         std::string mergedItems = GetMergedItemsPath();
-        if (mergedTerrain.empty() && mergedItems.empty())
+        if (mergedTerrain.empty() && mergedItems.empty() && !s_buildInProgress.load())
             return false;
 
         if (!mergedTerrain.empty())
@@ -1404,6 +1498,7 @@ namespace ModAtlas
             return false;
         }
 
+        s_createFileHookInstalled = true;
         LogUtil::Log("[WeaveLoader] ModAtlas: CreateFileW hook installed (terrain=%s, items=%s)",
                      mergedTerrain.c_str(), mergedItems.c_str());
         return true;
@@ -1420,6 +1515,7 @@ namespace ModAtlas
         }
         s_mergedTerrainW.clear();
         s_mergedItemsW.clear();
+        s_createFileHookInstalled = false;
         LogUtil::Log("[WeaveLoader] ModAtlas: CreateFileW hook removed");
     }
 
@@ -1436,6 +1532,8 @@ namespace ModAtlas
 
     void CreateModIcons(void* textureMap)
     {
+        if (s_buildInProgress.load())
+            return;
         if (!s_hasModTextures || !s_simpleIconCtor || !textureMap) return;
         if (!s_operatorNew) { LogUtil::Log("[WeaveLoader] ModAtlas: operator new not resolved, skipping icon creation"); return; }
 
@@ -1487,6 +1585,8 @@ namespace ModAtlas
 
     void FixupModIcons()
     {
+        if (s_buildInProgress.load())
+            return;
         if (s_modIcons.empty() || !s_originalRegisterIcon) return;
 
         // After Minecraft::init, vanilla icons have field_0x48 properly set.
@@ -1537,6 +1637,8 @@ namespace ModAtlas
 
     void* LookupModIcon(const std::wstring& name)
     {
+        if (s_buildInProgress.load())
+            return nullptr;
         auto it = s_modIcons.find(name);
         if (it != s_modIcons.end())
             return it->second;
@@ -1545,6 +1647,8 @@ namespace ModAtlas
 
     bool TryGetIconRoute(void* iconPtr, int& outAtlasType, int& outPage)
     {
+        if (s_buildInProgress.load())
+            return false;
         auto it = s_iconRoutes.find(iconPtr);
         if (it == s_iconRoutes.end())
             return false;
@@ -1555,6 +1659,13 @@ namespace ModAtlas
 
     void NotifyIconSampled(void* iconPtr)
     {
+        if (s_buildInProgress.load())
+        {
+            s_hasPendingPage = false;
+            s_pendingAtlasType = -1;
+            s_pendingPage = 0;
+            return;
+        }
         auto it = s_iconRoutes.find(iconPtr);
         if (it != s_iconRoutes.end())
         {

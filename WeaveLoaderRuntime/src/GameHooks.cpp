@@ -21,6 +21,8 @@
 #include <cctype>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#include <thread>
 #include <unordered_map>
 #include <cstddef>
 #include <vector>
@@ -116,6 +118,7 @@ namespace GameHooks
     static std::string s_modsPath;
     static std::unordered_map<std::string, std::string> s_modAssetRoots;
     static bool s_modAssetsIndexed = false;
+    static std::atomic<bool> s_modAssetsIndexing{false};
     static std::mutex s_modAssetsMutex;
     // Verified from compiled Player::inventory accesses in this game build.
     static constexpr ptrdiff_t kPlayerInventoryOffset = 0x340;
@@ -392,6 +395,11 @@ namespace GameHooks
         return out;
     }
 
+    static bool IsAsyncModAssetsEnabled()
+    {
+        return true;
+    }
+
     static void BuildModAssetIndexLocked()
     {
         s_modAssetRoots.clear();
@@ -445,8 +453,31 @@ namespace GameHooks
         FindClose(h);
     }
 
+    static void StartModAssetIndexAsync()
+    {
+        if (s_modsPath.empty())
+            return;
+        if (s_modAssetsIndexed || s_modAssetsIndexing.load())
+            return;
+        s_modAssetsIndexing = true;
+        std::thread([]()
+        {
+            {
+                std::lock_guard<std::mutex> guard(s_modAssetsMutex);
+                BuildModAssetIndexLocked();
+            }
+            s_modAssetsIndexing = false;
+            LogUtil::Log("[WeaveLoader] ModAssets: async index complete (%zu namespaces)", s_modAssetRoots.size());
+        }).detach();
+    }
+
     static void EnsureModAssetIndex()
     {
+        if (IsAsyncModAssetsEnabled())
+        {
+            StartModAssetIndexAsync();
+            return;
+        }
         if (s_modAssetsIndexed)
             return;
         std::lock_guard<std::mutex> guard(s_modAssetsMutex);
@@ -494,7 +525,19 @@ namespace GameHooks
         if (nsKey.empty())
             return false;
 
-        EnsureModAssetIndex();
+        if (IsAsyncModAssetsEnabled())
+        {
+            if (!s_modAssetsIndexed)
+            {
+                StartModAssetIndexAsync();
+                if (!s_modAssetsIndexed)
+                    return false;
+            }
+        }
+        else
+        {
+            EnsureModAssetIndex();
+        }
         auto it = s_modAssetRoots.find(nsKey);
         if (it == s_modAssetRoots.end())
             return false;
@@ -1294,9 +1337,13 @@ namespace GameHooks
 
     bool __fastcall Hooked_LevelSetTileAndData(void* thisPtr, int x, int y, int z, int tile, int data, int updateFlags)
     {
+        const int oldBlockId = s_levelGetTile ? s_levelGetTile(thisPtr, x, y, z) : -1;
         const bool result = Original_LevelSetTileAndData
             ? Original_LevelSetTileAndData(thisPtr, x, y, z, tile, data, updateFlags)
             : false;
+
+        if (result && s_levelGetTile)
+            WorldIdRemap::MarkChunkDirtyByBlockUpdate(x, z, oldBlockId, tile);
 
         if (result && tile > 0)
             DispatchManagedBlockById(tile, thisPtr, x, y, z, 0, 0);
@@ -2540,6 +2587,7 @@ namespace GameHooks
 
     void __fastcall Hooked_MinecraftTick(void* thisPtr, bool bFirst, bool bUpdateTextures)
     {
+        ModAtlas::PollAsyncBuild();
         CullSpawnedEntitiesBelowWorld();
         Original_MinecraftTick(thisPtr, bFirst, bUpdateTextures);
         CullSpawnedEntitiesBelowWorld();
@@ -2586,6 +2634,8 @@ namespace GameHooks
             s_modAssetsIndexed = false;
             s_modAssetRoots.clear();
         }
+        if (IsAsyncModAssetsEnabled())
+            StartModAssetIndexAsync();
         NativeExports::SetModsPath(modsPath);
         ModAtlas::SetBasePaths(modsPath, gameResPath);
         ModAtlas::EnsureAtlasesBuilt();
