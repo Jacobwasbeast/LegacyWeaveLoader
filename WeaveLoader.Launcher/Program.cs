@@ -32,6 +32,7 @@ class Program
         {
             var config = Config.Load(configFile);
             bool extensiveSymbolScan = false;
+            var passthroughArgs = new List<string>();
 
             foreach (string arg in args)
             {
@@ -45,6 +46,10 @@ class Program
                 {
                     config.GameExePath = arg;
                     config.Save(configFile);
+                }
+                else
+                {
+                    passthroughArgs.Add(arg);
                 }
             }
 
@@ -144,9 +149,13 @@ class Program
             if (extensiveSymbolScan)
                 Console.WriteLine("[..] Extensive symbol scan mode enabled");
 
+            if (passthroughArgs.Count > 0)
+                Console.WriteLine($"[..] Passing {passthroughArgs.Count} arg(s) to game");
+
+            string? extraArgs = BuildArgString(passthroughArgs, extensiveSymbolScan);
             var process = Injector.LaunchSuspended(
                 config.GameExePath,
-                extraArgs: extensiveSymbolScan ? "--extensive-symbol-scan" : null);
+                extraArgs: extraArgs);
             Console.WriteLine($"[OK] Game process created (PID: {process.ProcessId})");
             Console.WriteLine($"[..] Injecting {RuntimeDllName}...");
 
@@ -219,5 +228,29 @@ class Program
         {
             Console.WriteLine($"[WARN] Failed to delete {path}: {ex.Message}");
         }
+    }
+
+    private static string? BuildArgString(List<string> passthroughArgs, bool extensiveSymbolScan)
+    {
+        var args = new List<string>();
+        if (extensiveSymbolScan)
+            args.Add("--extensive-symbol-scan");
+        args.AddRange(passthroughArgs);
+        if (args.Count == 0)
+            return null;
+        for (int i = 0; i < args.Count; i++)
+            args[i] = QuoteArg(args[i]);
+        return string.Join(" ", args);
+    }
+
+    private static string QuoteArg(string arg)
+    {
+        if (string.IsNullOrEmpty(arg))
+            return "\"\"";
+        bool needsQuotes = arg.IndexOfAny(new[] { ' ', '\t', '"' }) >= 0;
+        if (!needsQuotes)
+            return arg;
+        string escaped = arg.Replace("\"", "\\\"");
+        return $"\"{escaped}\"";
     }
 }
