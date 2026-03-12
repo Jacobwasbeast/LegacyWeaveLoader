@@ -3,9 +3,13 @@
 #include <unordered_map>
 #include <mutex>
 #include <string>
+#include <array>
+#include <atomic>
 
 namespace
 {
+    constexpr int kFastModelLimit = 4096;
+
     struct BlockModelEntry
     {
         std::vector<ModelBox> base;
@@ -15,6 +19,13 @@ namespace
 
     std::unordered_map<int, BlockModelEntry> g_models;
     std::mutex g_mutex;
+    std::array<std::atomic<uint8_t>, kFastModelLimit> g_hasModel{};
+    std::array<std::atomic<int>, kFastModelLimit> g_rotationProfile{};
+
+    inline bool IsFastIndex(int blockId)
+    {
+        return blockId >= 0 && blockId < kFastModelLimit;
+    }
 }
 
 void ModelRegistry::RegisterBlockModel(int blockId, const ModelBox* boxes, int count)
@@ -31,6 +42,9 @@ void ModelRegistry::RegisterBlockModel(int blockId, const ModelBox* boxes, int c
         std::lock_guard<std::mutex> guard(g_mutex);
         g_models[blockId].base = std::move(data);
     }
+
+    if (IsFastIndex(blockId))
+        g_hasModel[blockId].store(1, std::memory_order_release);
 
     LogUtil::Log("[WeaveLoader] ModelRegistry: registered %d box(es) for block %d", count, blockId);
 }
@@ -50,6 +64,9 @@ void ModelRegistry::RegisterBlockModelVariant(int blockId, const char* key, cons
         g_models[blockId].variants[std::string(key)] = std::move(data);
     }
 
+    if (IsFastIndex(blockId))
+        g_hasModel[blockId].store(1, std::memory_order_release);
+
     LogUtil::Log("[WeaveLoader] ModelRegistry: registered variant '%s' (%d box(es)) for block %d", key, count, blockId);
 }
 
@@ -57,12 +74,33 @@ void ModelRegistry::SetRotationProfile(int blockId, int profile)
 {
     if (blockId < 0)
         return;
+    if (IsFastIndex(blockId))
+        g_rotationProfile[blockId].store(profile, std::memory_order_release);
     std::lock_guard<std::mutex> guard(g_mutex);
     g_models[blockId].rotationProfile = profile;
 }
 
+bool ModelRegistry::HasModel(int blockId)
+{
+    if (blockId < 0)
+        return false;
+    if (IsFastIndex(blockId))
+        return g_hasModel[blockId].load(std::memory_order_acquire) != 0;
+
+    std::lock_guard<std::mutex> guard(g_mutex);
+    auto it = g_models.find(blockId);
+    if (it == g_models.end())
+        return false;
+    return !it->second.base.empty() || !it->second.variants.empty();
+}
+
 int ModelRegistry::GetRotationProfile(int blockId)
 {
+    if (blockId < 0)
+        return 0;
+    if (IsFastIndex(blockId))
+        return g_rotationProfile[blockId].load(std::memory_order_acquire);
+
     std::lock_guard<std::mutex> guard(g_mutex);
     auto it = g_models.find(blockId);
     if (it == g_models.end())
@@ -72,6 +110,8 @@ int ModelRegistry::GetRotationProfile(int blockId)
 
 bool ModelRegistry::TryGetModel(int blockId, const std::vector<ModelBox>*& outBoxes)
 {
+    if (!HasModel(blockId))
+        return false;
     std::lock_guard<std::mutex> guard(g_mutex);
     auto it = g_models.find(blockId);
     if (it == g_models.end())
@@ -85,6 +125,8 @@ bool ModelRegistry::TryGetModel(int blockId, const std::vector<ModelBox>*& outBo
 bool ModelRegistry::TryGetModelVariant(int blockId, const char* key, const std::vector<ModelBox>*& outBoxes)
 {
     if (!key)
+        return false;
+    if (!HasModel(blockId))
         return false;
     std::lock_guard<std::mutex> guard(g_mutex);
     auto it = g_models.find(blockId);

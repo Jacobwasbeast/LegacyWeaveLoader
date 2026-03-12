@@ -576,6 +576,8 @@ namespace GameHooks
 
         static bool TryGetModelForState(int blockId, int data, void* levelPtr, int x, int y, int z, const std::vector<ModelBox>*& outBoxes)
         {
+            if (!ModelRegistry::HasModel(blockId))
+                return false;
             if (data < 0)
                 data = 0;
             const int profile = ModelRegistry::GetRotationProfile(blockId);
@@ -3427,7 +3429,7 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(tilePtr);
-        if (tileId >= 0)
+        if (tileId >= 0 && ModelRegistry::HasModel(tileId))
         {
             int data = forceData;
             void* levelPtr = nullptr;
@@ -3456,7 +3458,8 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(tilePtr);
-        if (tileId >= 0 && TryGetModelForState(tileId, data, nullptr, 0, 0, 0, boxes) && boxes && !boxes->empty())
+        if (tileId >= 0 && ModelRegistry::HasModel(tileId) &&
+            TryGetModelForState(tileId, data, nullptr, 0, 0, 0, boxes) && boxes && !boxes->empty())
         {
             if (Original_TileRendererRenderTile && Tile_SetShape)
             {
@@ -3483,7 +3486,8 @@ namespace GameHooks
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
         int data = Level_GetData && levelPtr ? Level_GetData(levelPtr, x, y, z) : 0;
-        if (tileId >= 0 && TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) && boxes && !boxes->empty() && AABB_NewTemp && boxesPtr && boxPtr)
+        if (tileId >= 0 && ModelRegistry::HasModel(tileId) &&
+            TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) && boxes && !boxes->empty() && AABB_NewTemp && boxesPtr && boxPtr)
         {
             auto list = reinterpret_cast<std::vector<void*>*>(boxesPtr);
             const AABBRaw* clipBox = reinterpret_cast<const AABBRaw*>(boxPtr);
@@ -3535,7 +3539,8 @@ namespace GameHooks
 
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
-        if (tileId >= 0 && ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty() && Tile_SetShape)
+        if (tileId >= 0 && ModelRegistry::HasModel(tileId) &&
+            ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty() && Tile_SetShape)
         {
             float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
             float maxX = 0.0f, maxY = 0.0f, maxZ = 0.0f;
@@ -3581,7 +3586,8 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
-        if (tileId >= 0 && ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty())
+        if (tileId >= 0 && ModelRegistry::HasModel(tileId) &&
+            ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty())
         {
             if (IsFullCubeModel(*boxes))
                 return Original_TileIsSolidRender ? Original_TileIsSolidRender(thisPtr, isServerLevel) : true;
@@ -3595,7 +3601,8 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
-        if (tileId >= 0 && ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty())
+        if (tileId >= 0 && ModelRegistry::HasModel(tileId) &&
+            ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty())
         {
             if (IsFullCubeModel(*boxes))
                 return Original_TileIsCubeShaped ? Original_TileIsCubeShaped(thisPtr) : true;
@@ -3613,7 +3620,8 @@ namespace GameHooks
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
         int data = Level_GetData && levelPtr ? Level_GetData(levelPtr, x, y, z) : 0;
-        if (tileId < 0 || !TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) || !boxes || boxes->empty())
+        if (tileId < 0 || !ModelRegistry::HasModel(tileId) ||
+            !TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) || !boxes || boxes->empty())
         {
             return Original_TileClip ? Original_TileClip(thisPtr, levelPtr, x, y, z, aPtr, bPtr) : nullptr;
         }
@@ -3697,7 +3705,8 @@ namespace GameHooks
 
                     const std::vector<ModelBox>* boxes = nullptr;
                     int data = Level_GetData ? Level_GetData(thisPtr, x, y, z) : 0;
-                    if (!TryGetModelForState(tileId, data, thisPtr, x, y, z, boxes) || !boxes || boxes->empty())
+                    if (!ModelRegistry::HasModel(tileId) ||
+                        !TryGetModelForState(tileId, data, thisPtr, x, y, z, boxes) || !boxes || boxes->empty())
                         continue;
 
                     for (const auto& box : *boxes)
