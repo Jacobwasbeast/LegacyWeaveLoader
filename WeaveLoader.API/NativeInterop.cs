@@ -78,6 +78,18 @@ internal static class NativeInterop
         int count);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern void native_register_block_model_variant(
+        int blockId,
+        string key,
+        [In] Assets.ModelBox[] boxes,
+        int count);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void native_register_block_rotation_profile(
+        int blockId,
+        int profile);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     internal static extern int native_register_item(
         string namespacedId,
         int maxStackSize,

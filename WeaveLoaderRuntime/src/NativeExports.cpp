@@ -312,6 +312,16 @@ void native_register_block_model(int blockId, const ModelBox* boxes, int count)
     ModelRegistry::RegisterBlockModel(blockId, boxes, count);
 }
 
+void native_register_block_model_variant(int blockId, const char* key, const ModelBox* boxes, int count)
+{
+    ModelRegistry::RegisterBlockModelVariant(blockId, key, boxes, count);
+}
+
+void native_register_block_rotation_profile(int blockId, int profile)
+{
+    ModelRegistry::SetRotationProfile(blockId, profile);
+}
+
 void native_configure_managed_block(int numericBlockId, int dropNumericBlockId, int cloneNumericBlockId)
 {
     if (numericBlockId < 0)

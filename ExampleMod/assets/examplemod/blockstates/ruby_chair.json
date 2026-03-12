@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "examplemod:block/ruby_chair"
+    },
+    "facing=east": {
+      "model": "examplemod:block/ruby_chair",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "examplemod:block/ruby_chair",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "examplemod:block/ruby_chair",
+      "y": 270
+    }
+  }
+}

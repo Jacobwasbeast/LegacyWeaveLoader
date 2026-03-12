@@ -244,6 +244,8 @@ public class ExampleMod : IMod
                 .Resistance(5f)
                 .Sound(SoundType.Wood)
                 .Model("examplemod:block/ruby_chair")
+                .BlockState("examplemod:ruby_chair")
+                .RotationProfile(BlockRotationProfile.Facing)
                 .Name(Text.Translatable("block.examplemod.ruby_chair"))
                 .InCreativeTab(CreativeTab.Decoration));
 

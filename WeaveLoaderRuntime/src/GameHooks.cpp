@@ -19,6 +19,7 @@
 #include <cstring>
 #include <cwchar>
 #include <cwctype>
+#include <algorithm>
 #include <vector>
 #include <cctype>
 #include <memory>
@@ -33,6 +34,7 @@
 
 namespace GameHooks
 {
+    static bool IsReadableRange(const void* ptr, size_t bytes);
     RunStaticCtors_fn     Original_RunStaticCtors = nullptr;
     MinecraftTick_fn      Original_MinecraftTick = nullptr;
     MinecraftInit_fn      Original_MinecraftInit = nullptr;
@@ -56,6 +58,7 @@ namespace GameHooks
     TextureGetSourceDim_fn Original_ClockTextureGetSourceWidth = nullptr;
     TextureGetSourceDim_fn Original_ClockTextureGetSourceHeight = nullptr;
     ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock = nullptr;
+    ItemInstanceUseOn_fn Original_ItemInstanceUseOn = nullptr;
     ItemInstanceSave_fn Original_ItemInstanceSave = nullptr;
     ItemInstanceLoad_fn Original_ItemInstanceLoad = nullptr;
     ItemMineBlock_fn       Original_ItemMineBlock = nullptr;
@@ -70,6 +73,7 @@ namespace GameHooks
     LevelSetTileAndDataDispatch_fn Original_LevelSetTileAndData = nullptr;
     LevelSetDataDispatch_fn Original_LevelSetData = nullptr;
     LevelUpdateNeighborsAtDispatch_fn Original_LevelUpdateNeighborsAt = nullptr;
+    LevelGetData_fn Level_GetData = nullptr;
     ServerLevelTickPendingTicks_fn Original_ServerLevelTickPendingTicks = nullptr;
     TileGetResource_fn Original_TileGetResource = nullptr;
     McRegionChunkStorageLoad_fn Original_McRegionChunkStorageLoad = nullptr;
@@ -241,6 +245,11 @@ namespace GameHooks
 
         static std::atomic<bool> s_tileIdOffsetTried{false};
         static int s_tileIdOffset = -1;
+        static std::atomic<bool> s_tileRendererLevelOffsetTried{false};
+        static int s_tileRendererLevelOffset = -1;
+        static std::atomic<bool> s_entityYawOffsetTried{false};
+        static int s_entityYawOffset = -1;
+        static int s_rotationLogCount = 0;
 
         static bool ReadFileToString(const char* path, std::string& out)
         {
@@ -332,6 +341,71 @@ namespace GameHooks
             return true;
         }
 
+        static bool TryResolveTileRendererLevelOffset()
+        {
+            bool expected = false;
+            if (!s_tileRendererLevelOffsetTried.compare_exchange_strong(expected, true))
+                return s_tileRendererLevelOffset >= 0;
+
+            const char* baseDir = LogUtil::GetBaseDir();
+            if (!baseDir || baseDir[0] == '\0')
+                return false;
+
+            std::string json;
+            std::string path = std::string(baseDir) + "metadata\\offsets.json";
+            if (!ReadFileToString(path.c_str(), json))
+            {
+                path = std::string(baseDir) + "offsets.json";
+                if (!ReadFileToString(path.c_str(), json))
+                    return false;
+            }
+
+            int offset = -1;
+            if (!ExtractOffsetForField(json, "TileRenderer", "level", offset))
+                return false;
+            if (offset <= 0)
+                return false;
+
+            s_tileRendererLevelOffset = offset;
+            LogUtil::Log("[WeaveLoader] ModelRegistry: TileRenderer.level offset = 0x%X", s_tileRendererLevelOffset);
+            return true;
+        }
+
+        static bool TryResolveEntityYawOffset()
+        {
+            bool expected = false;
+            if (!s_entityYawOffsetTried.compare_exchange_strong(expected, true))
+                return s_entityYawOffset >= 0;
+
+            const char* baseDir = LogUtil::GetBaseDir();
+            if (!baseDir || baseDir[0] == '\0')
+                return false;
+
+            std::string json;
+            std::string path = std::string(baseDir) + "metadata\\offsets.json";
+            if (!ReadFileToString(path.c_str(), json))
+            {
+                path = std::string(baseDir) + "offsets.json";
+                if (!ReadFileToString(path.c_str(), json))
+                    return false;
+            }
+
+            int offset = -1;
+            if (!ExtractOffsetForField(json, "Entity", "yRot", offset))
+            {
+                if (s_rotationLogCount < 20)
+                {
+                    LogUtil::Log("[WeaveLoader] Rotation: failed to read Entity.yRot offset");
+                    s_rotationLogCount++;
+                }
+                return false;
+            }
+
+            s_entityYawOffset = offset;
+            LogUtil::Log("[WeaveLoader] ModelRegistry: Entity.yRot offset = 0x%X", s_entityYawOffset);
+            return true;
+        }
+
         int GetTileId(void* tilePtr)
         {
             if (!tilePtr)
@@ -339,6 +413,176 @@ namespace GameHooks
             if (s_tileIdOffset < 0 && !TryResolveTileIdOffset())
                 return -1;
             return *reinterpret_cast<int*>(reinterpret_cast<char*>(tilePtr) + s_tileIdOffset);
+        }
+
+        void* GetTileRendererLevel(void* rendererPtr)
+        {
+            if (!rendererPtr)
+                return nullptr;
+            if (s_tileRendererLevelOffset < 0 && !TryResolveTileRendererLevelOffset())
+                return nullptr;
+            if (s_tileRendererLevelOffset <= 0)
+                return nullptr;
+            return *reinterpret_cast<void**>(reinterpret_cast<char*>(rendererPtr) + s_tileRendererLevelOffset);
+        }
+
+        static bool TryGetEntityYaw(void* entityPtr, float& outYaw)
+        {
+            if (!entityPtr)
+                return false;
+            if (s_entityYawOffset < 0 && !TryResolveEntityYawOffset())
+                return false;
+
+            const char* base = reinterpret_cast<const char*>(entityPtr) + s_entityYawOffset;
+            if (!IsReadableRange(base, sizeof(float)))
+                return false;
+
+            outYaw = *reinterpret_cast<const float*>(base);
+            return true;
+        }
+
+        static const char* FacingFromDoorDir(int dir)
+        {
+            switch (dir & 3)
+            {
+                case 0: return "east";
+                case 1: return "south";
+                case 2: return "west";
+                default: return "north";
+            }
+        }
+
+        static const char* FacingFromFacingDir(int dir)
+        {
+            switch (dir & 3)
+            {
+                case 0: return "east";
+                case 1: return "north";
+                case 2: return "west";
+                default: return "south";
+            }
+        }
+
+        static const char* FacingFromTrapdoorDir(int dir)
+        {
+            switch (dir & 3)
+            {
+                case 0: return "north";
+                case 1: return "south";
+                case 2: return "west";
+                default: return "east";
+            }
+        }
+
+        static const char* FacingFromWallSignFace(int face)
+        {
+            switch (face)
+            {
+                case 2: return "north";
+                case 3: return "south";
+                case 4: return "west";
+                case 5: return "east";
+                default: return "north";
+            }
+        }
+
+        struct StateProp
+        {
+            std::string name;
+            std::string value;
+        };
+
+        static void AppendProp(std::vector<StateProp>& props, const char* name, const char* value)
+        {
+            props.push_back(StateProp{ std::string(name), std::string(value) });
+        }
+
+        static int GetDoorCompositeData(void* levelPtr, int x, int y, int z, int data)
+        {
+            if (!levelPtr || !Level_GetData)
+                return data;
+
+            const bool isUpper = (data & 8) != 0;
+            const int lowerData = isUpper ? Level_GetData(levelPtr, x, y - 1, z) : data;
+            const int upperData = isUpper ? data : Level_GetData(levelPtr, x, y + 1, z);
+            const bool rightHinge = (upperData & 1) != 0;
+            return (lowerData & 7) | (isUpper ? 8 : 0) | (rightHinge ? 16 : 0);
+        }
+
+        static std::string BuildStateKey(int profile, int data, void* levelPtr, int x, int y, int z)
+        {
+            std::vector<StateProp> props;
+            data &= 15;
+            switch (profile)
+            {
+                case 1: // Facing
+                {
+                    AppendProp(props, "facing", FacingFromFacingDir(data));
+                    break;
+                }
+                case 2: // WallSign
+                {
+                    AppendProp(props, "facing", FacingFromWallSignFace(data));
+                    break;
+                }
+                case 3: // StandingSign
+                {
+                    int rot = data & 15;
+                    std::string rotStr = std::to_string(rot);
+                    AppendProp(props, "rotation", rotStr.c_str());
+                    break;
+                }
+                case 4: // Trapdoor
+                {
+                    AppendProp(props, "facing", FacingFromTrapdoorDir(data));
+                    AppendProp(props, "half", (data & 8) != 0 ? "top" : "bottom");
+                    AppendProp(props, "open", (data & 4) != 0 ? "true" : "false");
+                    break;
+                }
+                case 5: // Door
+                {
+                    const int composite = GetDoorCompositeData(levelPtr, x, y, z, data);
+                    AppendProp(props, "facing", FacingFromDoorDir(composite));
+                    AppendProp(props, "half", (composite & 8) != 0 ? "upper" : "lower");
+                    AppendProp(props, "hinge", (composite & 16) != 0 ? "right" : "left");
+                    AppendProp(props, "open", (composite & 4) != 0 ? "true" : "false");
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            if (props.empty())
+                return std::string();
+
+            std::sort(props.begin(), props.end(), [](const StateProp& a, const StateProp& b)
+            {
+                return a.name < b.name;
+            });
+
+            std::string key;
+            for (size_t i = 0; i < props.size(); ++i)
+            {
+                if (i > 0)
+                    key.push_back(',');
+                key.append(props[i].name);
+                key.push_back('=');
+                key.append(props[i].value);
+            }
+            return key;
+        }
+
+        static bool TryGetModelForState(int blockId, int data, void* levelPtr, int x, int y, int z, const std::vector<ModelBox>*& outBoxes)
+        {
+            if (data < 0)
+                data = 0;
+            const int profile = ModelRegistry::GetRotationProfile(blockId);
+            const std::string key = profile != 0 ? BuildStateKey(profile, data, levelPtr, x, y, z) : std::string();
+            if (!key.empty() && ModelRegistry::TryGetModelVariant(blockId, key.c_str(), outBoxes))
+                return true;
+            if (ModelRegistry::TryGetModelVariant(blockId, "", outBoxes))
+                return true;
+            return ModelRegistry::TryGetModel(blockId, outBoxes);
         }
 
         bool RenderModelInWorld(void* renderer, void* tilePtr, int x, int y, int z, const std::vector<ModelBox>& boxes)
@@ -395,6 +639,9 @@ namespace GameHooks
     static int s_itemMineBlockHookCalls = 0;
     static void* s_currentLevel = nullptr;
     static thread_local void* s_activeUseLevel = nullptr;
+    static thread_local void* s_lastUsePlayer = nullptr;
+    static thread_local void* s_lastUseLevel = nullptr;
+    static thread_local ULONGLONG s_lastUseTimeMs = 0;
     static LevelAddEntity_fn s_levelAddEntity = nullptr;
     static EntityIONewById_fn s_entityIoNewById = nullptr;
     static EntityMoveTo_fn s_entityMoveTo = nullptr;
@@ -1631,6 +1878,30 @@ namespace GameHooks
         DispatchManagedBlockUpdate(thisPtr, level, x, y, z, 2, 0);
     }
 
+    static bool TryGetPlacementPlayer(void* levelPtr, void*& outPlayerPtr)
+    {
+        (void)levelPtr;
+        if (!s_lastUsePlayer)
+            return false;
+
+        const ULONGLONG nowMs = GetTickCount64();
+        if (nowMs < s_lastUseTimeMs || nowMs - s_lastUseTimeMs > 500)
+            return false;
+
+        outPlayerPtr = s_lastUsePlayer;
+        return true;
+    }
+
+    static int ComputeFacingDataFromYaw(float yaw)
+    {
+        return static_cast<int>(std::floor(((yaw + 180.0f) * 4.0f) / 360.0f - 0.5f)) & 3;
+    }
+
+    static int ComputeStandingSignDataFromYaw(float yaw)
+    {
+        return static_cast<int>(std::floor(((yaw + 180.0f) * 16.0f) / 360.0f + 0.5f)) & 15;
+    }
+
     bool __fastcall Hooked_LevelSetTileAndData(void* thisPtr, int x, int y, int z, int tile, int data, int updateFlags)
     {
         const int oldBlockId = s_levelGetTile ? s_levelGetTile(thisPtr, x, y, z) : -1;
@@ -1643,6 +1914,51 @@ namespace GameHooks
 
         if (result && tile > 0)
             DispatchManagedBlockById(tile, thisPtr, x, y, z, 0, 0);
+
+        if (result && tile > 0 && Original_LevelSetData)
+        {
+            const int profile = ModelRegistry::GetRotationProfile(tile);
+            if (profile == 1 || profile == 3)
+            {
+                if (s_rotationLogCount < 20)
+                {
+                    LogUtil::Log("[WeaveLoader] Rotation: tile=%d profile=%d data=%d pos=(%d,%d,%d)", tile, profile, data, x, y, z);
+                    s_rotationLogCount++;
+                }
+                void* playerPtr = nullptr;
+                if (TryGetPlacementPlayer(thisPtr, playerPtr))
+                {
+                    float yaw = 0.0f;
+                    if (TryGetEntityYaw(playerPtr, yaw))
+                    {
+                        int newData = data;
+                        if (profile == 1)
+                            newData = ComputeFacingDataFromYaw(yaw);
+                        else
+                            newData = ComputeStandingSignDataFromYaw(yaw);
+
+                        if (newData != data)
+                            Original_LevelSetData(thisPtr, x, y, z, newData, updateFlags, false);
+
+                        if (s_rotationLogCount < 20)
+                        {
+                            LogUtil::Log("[WeaveLoader] Rotation: yaw=%.2f data=%d -> %d", yaw, data, newData);
+                            s_rotationLogCount++;
+                        }
+                    }
+                    else if (s_rotationLogCount < 20)
+                    {
+                        LogUtil::Log("[WeaveLoader] Rotation: no yaw (offsets loaded=%s)", s_entityYawOffset >= 0 ? "true" : "false");
+                        s_rotationLogCount++;
+                    }
+                }
+                else if (s_rotationLogCount < 20)
+                {
+                    LogUtil::Log("[WeaveLoader] Rotation: no placement player (lastUse=%p)", s_lastUsePlayer);
+                    s_rotationLogCount++;
+                }
+            }
+        }
 
         return result;
     }
@@ -2408,6 +2724,24 @@ namespace GameHooks
             Original_ItemInstanceMineBlock(thisPtr, level, tile, x, y, z, ownerSharedPtr);
     }
 
+    bool __fastcall Hooked_ItemInstanceUseOn(void* thisPtr, void* playerSharedPtr, void* level, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly)
+    {
+        if (!bTestUseOnOnly)
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            if (playerPtr)
+            {
+                s_lastUsePlayer = playerPtr;
+                s_lastUseLevel = level;
+                s_lastUseTimeMs = GetTickCount64();
+            }
+        }
+
+        if (Original_ItemInstanceUseOn)
+            return Original_ItemInstanceUseOn(thisPtr, playerSharedPtr, level, x, y, z, face, clickX, clickY, clickZ, bTestUseOnOnly);
+        return false;
+    }
+
     void* __fastcall Hooked_ItemInstanceSave(void* thisPtr, void* compoundTagPtr)
     {
         // Namespace marker now lives on ItemInstance::tag, so it must be present
@@ -2699,6 +3033,16 @@ namespace GameHooks
             s_pendingServerUseItemId = -1;
             s_pendingServerUseExpiryMs = 0;
         }
+        if (!effectiveTestUseOnly)
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            if (playerPtr)
+            {
+                s_lastUsePlayer = playerPtr;
+                s_lastUseLevel = level;
+                s_lastUseTimeMs = nowMs;
+            }
+        }
         if (s_serverUseLogCount < 40)
         {
             LogUtil::Log("[WeaveLoader] UseHook ServerPlayerGameMode::useItem test=%d effective=%d item=%d itemPtr=%p playerShared=%p level=%p",
@@ -2725,6 +3069,16 @@ namespace GameHooks
         {
             s_pendingServerUseItemId = itemId;
             s_pendingServerUseExpiryMs = GetTickCount64() + 1000;
+        }
+        if (!bTestUseOnly)
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            if (playerPtr)
+            {
+                s_lastUsePlayer = playerPtr;
+                s_lastUseLevel = level;
+                s_lastUseTimeMs = GetTickCount64();
+            }
         }
         if (s_multiUseLogCount < 40)
         {
@@ -3027,10 +3381,24 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(tilePtr);
-        if (tileId >= 0 && ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty())
+        if (tileId >= 0)
         {
-            if (RenderModelInWorld(thisPtr, tilePtr, x, y, z, *boxes))
-                return true;
+            int data = forceData;
+            void* levelPtr = nullptr;
+            if (data < 0 || ModelRegistry::GetRotationProfile(tileId) != 0)
+            {
+                levelPtr = GetTileRendererLevel(thisPtr);
+                if (!levelPtr && s_currentLevel)
+                    levelPtr = s_currentLevel;
+                if (data < 0 && levelPtr && Level_GetData)
+                    data = Level_GetData(levelPtr, x, y, z);
+            }
+
+            if (TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) && boxes && !boxes->empty())
+            {
+                if (RenderModelInWorld(thisPtr, tilePtr, x, y, z, *boxes))
+                    return true;
+            }
         }
 
         return Original_TileRendererTesselateInWorld
@@ -3042,7 +3410,7 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(tilePtr);
-        if (tileId >= 0 && ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty())
+        if (tileId >= 0 && TryGetModelForState(tileId, data, nullptr, 0, 0, 0, boxes) && boxes && !boxes->empty())
         {
             if (Original_TileRendererRenderTile && Tile_SetShape)
             {
@@ -3068,7 +3436,8 @@ namespace GameHooks
     {
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
-        if (tileId >= 0 && ModelRegistry::TryGetModel(tileId, boxes) && boxes && !boxes->empty() && AABB_NewTemp && boxesPtr && boxPtr)
+        int data = Level_GetData && levelPtr ? Level_GetData(levelPtr, x, y, z) : 0;
+        if (tileId >= 0 && TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) && boxes && !boxes->empty() && AABB_NewTemp && boxesPtr && boxPtr)
         {
             auto list = reinterpret_cast<std::vector<void*>*>(boxesPtr);
             const AABBRaw* clipBox = reinterpret_cast<const AABBRaw*>(boxPtr);
@@ -3197,7 +3566,8 @@ namespace GameHooks
 
         const std::vector<ModelBox>* boxes = nullptr;
         int tileId = GetTileId(thisPtr);
-        if (tileId < 0 || !ModelRegistry::TryGetModel(tileId, boxes) || !boxes || boxes->empty())
+        int data = Level_GetData && levelPtr ? Level_GetData(levelPtr, x, y, z) : 0;
+        if (tileId < 0 || !TryGetModelForState(tileId, data, levelPtr, x, y, z, boxes) || !boxes || boxes->empty())
         {
             return Original_TileClip ? Original_TileClip(thisPtr, levelPtr, x, y, z, aPtr, bPtr) : nullptr;
         }
@@ -3280,7 +3650,8 @@ namespace GameHooks
                         continue;
 
                     const std::vector<ModelBox>* boxes = nullptr;
-                    if (!ModelRegistry::TryGetModel(tileId, boxes) || !boxes || boxes->empty())
+                    int data = Level_GetData ? Level_GetData(thisPtr, x, y, z) : 0;
+                    if (!TryGetModelForState(tileId, data, thisPtr, x, y, z, boxes) || !boxes || boxes->empty())
                         continue;
 
                     for (const auto& box : *boxes)

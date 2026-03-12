@@ -53,6 +53,19 @@ public enum SoundType
 }
 
 /// <summary>
+/// Rotation/profile mapping used when resolving blockstate variants.
+/// </summary>
+public enum BlockRotationProfile
+{
+    None = 0,
+    Facing = 1,
+    WallSign = 2,
+    StandingSign = 3,
+    Trapdoor = 4,
+    Door = 5
+}
+
+/// <summary>
 /// Fluent builder for defining block properties.
 /// </summary>
 public class BlockProperties
@@ -73,7 +86,10 @@ public class BlockProperties
     internal ToolType RequiredToolValue = ToolType.None;
     internal bool AcceptsRedstonePowerValue;
     internal List<Assets.ModelBox>? ModelBoxes;
+    internal Dictionary<string, List<Assets.ModelBox>>? ModelVariants;
     internal bool ModelIsFullCube;
+    internal BlockRotationProfile RotationProfileValue = BlockRotationProfile.None;
+    internal string? BlockStateValue;
 
     public BlockProperties Material(MaterialType material) { MaterialValue = material; return this; }
     public BlockProperties Hardness(float hardness) { HardnessValue = hardness; return this; }
@@ -106,4 +122,8 @@ public class BlockProperties
     public BlockProperties RequiredTool(ToolType tool) { RequiredToolValue = tool; return this; }
     /// <summary>Marks the block as one that can receive redstone power. Stored for future block callbacks.</summary>
     public BlockProperties AcceptsRedstonePower(bool accepts = true) { AcceptsRedstonePowerValue = accepts; return this; }
+    /// <summary>Optional blockstate JSON name (e.g. "examplemod:ruby_chair").</summary>
+    public BlockProperties BlockState(string blockStateName) { BlockStateValue = blockStateName; return this; }
+    /// <summary>Rotation/profile mapping for blockstate variants.</summary>
+    public BlockProperties RotationProfile(BlockRotationProfile profile) { RotationProfileValue = profile; return this; }
 }

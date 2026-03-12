@@ -51,6 +51,7 @@ public static class BlockRegistry
     public static RegisteredBlock Register(Identifier id, BlockProperties properties)
     {
         Assets.ModelResolver.ApplyBlockModel(id, properties);
+        Assets.ModelResolver.ApplyBlockStates(id, properties);
         ApplyModelLightDefaults(properties);
         int numericId = NativeInterop.native_register_block(
             id.ToString(),
@@ -72,10 +73,7 @@ public static class BlockRegistry
             throw new InvalidOperationException($"Failed to register block '{id}'. No free IDs or invalid parameters.");
         }
 
-        if (properties.ModelBoxes != null && properties.ModelBoxes.Count > 0)
-        {
-            NativeInterop.native_register_block_model(numericId, properties.ModelBoxes.ToArray(), properties.ModelBoxes.Count);
-        }
+        RegisterBlockModels(numericId, properties);
 
         AddToCreative(id, numericId, properties);
 
@@ -96,6 +94,7 @@ public static class BlockRegistry
             return RegisterFalling(id, managedBlock, properties);
 
         Assets.ModelResolver.ApplyBlockModel(id, properties);
+        Assets.ModelResolver.ApplyBlockStates(id, properties);
         ApplyModelLightDefaults(properties);
         int numericId = NativeInterop.native_register_managed_block(
             id.ToString(),
@@ -117,10 +116,7 @@ public static class BlockRegistry
             throw new InvalidOperationException($"Failed to register managed block '{id}'.");
         }
 
-        if (properties.ModelBoxes != null && properties.ModelBoxes.Count > 0)
-        {
-            NativeInterop.native_register_block_model(numericId, properties.ModelBoxes.ToArray(), properties.ModelBoxes.Count);
-        }
+        RegisterBlockModels(numericId, properties);
 
         AddToCreative(id, numericId, properties);
 
@@ -149,6 +145,7 @@ public static class BlockRegistry
     private static RegisteredBlock RegisterFalling(Identifier id, Block? managedBlock, BlockProperties properties)
     {
         Assets.ModelResolver.ApplyBlockModel(id, properties);
+        Assets.ModelResolver.ApplyBlockStates(id, properties);
         ApplyModelLightDefaults(properties);
         int numericId = NativeInterop.native_register_falling_block(
             id.ToString(),
@@ -170,10 +167,7 @@ public static class BlockRegistry
             throw new InvalidOperationException($"Failed to register falling block '{id}'.");
         }
 
-        if (properties.ModelBoxes != null && properties.ModelBoxes.Count > 0)
-        {
-            NativeInterop.native_register_block_model(numericId, properties.ModelBoxes.ToArray(), properties.ModelBoxes.Count);
-        }
+        RegisterBlockModels(numericId, properties);
 
         AddToCreative(id, numericId, properties);
 
@@ -202,6 +196,7 @@ public static class BlockRegistry
     public static RegisteredSlabBlock RegisterSlab(Identifier id, BlockProperties properties)
     {
         Assets.ModelResolver.ApplyBlockModel(id, properties);
+        Assets.ModelResolver.ApplyBlockStates(id, properties);
         ApplyModelLightDefaults(properties);
         Identifier doubleId = new($"{id}_double");
         int numericId = NativeInterop.native_register_slab_block(
@@ -230,10 +225,7 @@ public static class BlockRegistry
             throw new InvalidOperationException($"Failed to resolve generated slab pair '{doubleId}'.");
         }
 
-        if (properties.ModelBoxes != null && properties.ModelBoxes.Count > 0)
-        {
-            NativeInterop.native_register_block_model(numericId, properties.ModelBoxes.ToArray(), properties.ModelBoxes.Count);
-        }
+        RegisterBlockModels(numericId, properties);
 
         AddToCreative(id, numericId, properties);
 
@@ -256,6 +248,27 @@ public static class BlockRegistry
 
         if (!properties.ModelIsFullCube)
             properties.LightBlockValue = 0;
+    }
+
+    private static void RegisterBlockModels(int numericId, BlockProperties properties)
+    {
+        if (properties.ModelBoxes != null && properties.ModelBoxes.Count > 0)
+        {
+            NativeInterop.native_register_block_model(numericId, properties.ModelBoxes.ToArray(), properties.ModelBoxes.Count);
+        }
+
+        if (properties.ModelVariants != null)
+        {
+            foreach (var variant in properties.ModelVariants)
+            {
+                var boxes = variant.Value;
+                if (boxes.Count == 0)
+                    continue;
+                NativeInterop.native_register_block_model_variant(numericId, variant.Key, boxes.ToArray(), boxes.Count);
+            }
+        }
+
+        NativeInterop.native_register_block_rotation_profile(numericId, (int)properties.RotationProfileValue);
     }
     internal static bool TryGetIdentifier(int numericId, out Identifier id)
     {

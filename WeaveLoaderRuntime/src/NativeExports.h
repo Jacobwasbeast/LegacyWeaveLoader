@@ -96,6 +96,14 @@ extern "C"
         int blockId,
         const ModelBox* boxes,
         int count);
+    __declspec(dllexport) void native_register_block_model_variant(
+        int blockId,
+        const char* key,
+        const ModelBox* boxes,
+        int count);
+    __declspec(dllexport) void native_register_block_rotation_profile(
+        int blockId,
+        int profile);
 
     __declspec(dllexport) int native_register_item(
         const char* namespacedId,

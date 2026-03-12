@@ -63,6 +63,7 @@ namespace
 
     static const char* SYM_ITEMINSTANCE_GETICON = "?getIcon@ItemInstance@@QEAAPEAVIcon@@XZ";
     static const char* SYM_ITEMINSTANCE_MINEBLOCK = "?mineBlock@ItemInstance@@QEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
+    static const char* SYM_ITEMINSTANCE_USEON = "?useOn@ItemInstance@@QEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@HHHHMMM_N@Z";
     static const char* SYM_ITEMINSTANCE_SAVE = "?save@ItemInstance@@QEAAPEAVCompoundTag@@PEAV2@@Z";
     static const char* SYM_ITEMINSTANCE_LOAD = "?load@ItemInstance@@QEAAXPEAVCompoundTag@@@Z";
     static const char* SYM_ITEMINSTANCE_HURTANDBREAK = "?hurtAndBreak@ItemInstance@@QEAAXHV?$shared_ptr@VLivingEntity@@@std@@@Z";
@@ -112,6 +113,7 @@ namespace
     static const char* SYM_LEVEL_UPDATE_NEIGHBORS_AT = "?updateNeighborsAt@Level@@QEAAXHHHH@Z";
     static const char* SYM_SERVERLEVEL_TICKPENDINGTICKS = "?tickPendingTicks@ServerLevel@@UEAA_N_N@Z";
     static const char* SYM_LEVEL_GETTILE = "?getTile@Level@@UEAAHHHH@Z";
+    static const char* SYM_LEVEL_GETDATA = "?getData@Level@@UEAAHHHH@Z";
     static const char* SYM_LEVEL_SETDATA = "?setData@Level@@UEAA_NHHHHH_N@Z";
     static const char* SYM_LEVEL_CLIP = "?clip@Level@@QEAAPEAVHitResult@@PEAVVec3@@0_N1@Z";
     static const char* SYM_MCREGIONCHUNKSTORAGE_LOAD = "?load@McRegionChunkStorage@@UEAAPEAVLevelChunk@@PEAVLevel@@HH@Z";
@@ -296,6 +298,7 @@ bool ItemSymbols::Resolve(SymbolResolver& resolver)
 {
     pItemInstanceGetIcon = resolver.Resolve(SYM_ITEMINSTANCE_GETICON);
     pItemInstanceMineBlock = resolver.Resolve(SYM_ITEMINSTANCE_MINEBLOCK);
+    pItemInstanceUseOn = resolver.Resolve(SYM_ITEMINSTANCE_USEON);
     pItemInstanceSave = resolver.Resolve(SYM_ITEMINSTANCE_SAVE);
     pItemInstanceLoad = resolver.Resolve(SYM_ITEMINSTANCE_LOAD);
     pItemInstanceHurtAndBreak = resolver.Resolve(SYM_ITEMINSTANCE_HURTANDBREAK);
@@ -314,6 +317,7 @@ void ItemSymbols::Log() const
 {
     LogSym("ItemInstance::getIcon", pItemInstanceGetIcon);
     LogSym("ItemInstance::mineBlock", pItemInstanceMineBlock);
+    LogSym("ItemInstance::useOn", pItemInstanceUseOn);
     LogSym("ItemInstance::save", pItemInstanceSave);
     LogSym("ItemInstance::load", pItemInstanceLoad);
     LogSym("ItemInstance::hurtAndBreak", pItemInstanceHurtAndBreak);
@@ -420,6 +424,7 @@ bool LevelSymbols::Resolve(SymbolResolver& resolver)
     pLevelUpdateNeighborsAt = resolver.Resolve(SYM_LEVEL_UPDATE_NEIGHBORS_AT);
     pServerLevelTickPendingTicks = resolver.Resolve(SYM_SERVERLEVEL_TICKPENDINGTICKS);
     pLevelGetTile = resolver.Resolve(SYM_LEVEL_GETTILE);
+    pLevelGetData = resolver.Resolve(SYM_LEVEL_GETDATA);
     pLevelSetData = resolver.Resolve(SYM_LEVEL_SETDATA);
     pLevelClip = resolver.Resolve(SYM_LEVEL_CLIP);
     pMcRegionChunkStorageLoad = resolver.Resolve(SYM_MCREGIONCHUNKSTORAGE_LOAD);
@@ -445,6 +450,7 @@ void LevelSymbols::Log() const
     LogSym("Level::updateNeighborsAt", pLevelUpdateNeighborsAt);
     LogSym("ServerLevel::tickPendingTicks", pServerLevelTickPendingTicks);
     LogSym("Level::getTile", pLevelGetTile);
+    LogSym("Level::getData", pLevelGetData);
     LogSym("Level::setData", pLevelSetData);
     LogSym("Level::clip", pLevelClip);
     LogSym("McRegionChunkStorage::load", pMcRegionChunkStorageLoad);

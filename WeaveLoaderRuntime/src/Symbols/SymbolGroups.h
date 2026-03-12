@@ -77,6 +77,7 @@ struct ItemSymbols
 {
     void* pItemInstanceGetIcon = nullptr;
     void* pItemInstanceMineBlock = nullptr;
+    void* pItemInstanceUseOn = nullptr;
     void* pItemInstanceSave = nullptr;
     void* pItemInstanceLoad = nullptr;
     void* pItemInstanceHurtAndBreak = nullptr;
@@ -138,6 +139,7 @@ struct LevelSymbols
     void* pLevelUpdateNeighborsAt = nullptr;
     void* pServerLevelTickPendingTicks = nullptr;
     void* pLevelGetTile = nullptr;
+    void* pLevelGetData = nullptr;
     void* pLevelSetData = nullptr;
     void* pLevelClip = nullptr;
     void* pMcRegionChunkStorageLoad = nullptr;

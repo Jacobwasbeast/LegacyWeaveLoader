@@ -45,6 +45,8 @@ bool HookManager::Install(const SymbolResolver& symbols)
         reinterpret_cast<Vec3NewTemp_fn>(symbols.Tile.pVec3NewTemp);
     GameHooks::HitResult_Ctor =
         reinterpret_cast<HitResultCtor_fn>(symbols.Tile.pHitResultCtor);
+    GameHooks::Level_GetData =
+        reinterpret_cast<LevelGetData_fn>(symbols.Level.pLevelGetData);
 
     if (symbols.Core.pRunStaticCtors)
     {
@@ -107,6 +109,20 @@ bool HookManager::Install(const SymbolResolver& symbols)
         else
         {
             LogUtil::Log("[WeaveLoader] Hooked ItemInstance::mineBlock (managed item callbacks)");
+        }
+    }
+
+    if (symbols.Item.pItemInstanceUseOn)
+    {
+        if (MH_CreateHook(symbols.Item.pItemInstanceUseOn,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceUseOn),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceUseOn)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::useOn");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::useOn (placement tracking)");
         }
     }
 

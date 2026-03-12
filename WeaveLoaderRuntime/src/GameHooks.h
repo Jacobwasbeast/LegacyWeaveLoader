@@ -25,6 +25,7 @@ typedef void (__fastcall *ItemRendererRenderItemBillboard_fn)(void* thisPtr, voi
 typedef void (__fastcall *AnimatedTextureCycleFrames_fn)(void* thisPtr);
 typedef int (__fastcall *TextureGetSourceDim_fn)(void* thisPtr);
 typedef void (__fastcall *ItemInstanceMineBlock_fn)(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
+typedef bool (__fastcall *ItemInstanceUseOn_fn)(void* thisPtr, void* playerSharedPtr, void* level, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly);
 typedef void* (__fastcall *ItemInstanceSave_fn)(void* thisPtr, void* compoundTagPtr);
 typedef void (__fastcall *ItemInstanceLoad_fn)(void* thisPtr, void* compoundTagPtr);
 typedef bool (__fastcall *ItemMineBlock_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
@@ -38,6 +39,7 @@ typedef bool (__fastcall *LevelSetDataDispatch_fn)(void* thisPtr, int x, int y, 
 typedef void (__fastcall *LevelUpdateNeighborsAtDispatch_fn)(void* thisPtr, int x, int y, int z, int type);
 typedef bool (__fastcall *ServerLevelTickPendingTicks_fn)(void* thisPtr, bool force);
 typedef int (__fastcall *LevelGetTile_fn)(void* thisPtr, int x, int y, int z);
+typedef int (__fastcall *LevelGetData_fn)(void* thisPtr, int x, int y, int z);
 typedef void* (__fastcall *McRegionChunkStorageLoad_fn)(void* thisPtr, void* level, int x, int z);
 typedef void (__fastcall *McRegionChunkStorageSave_fn)(void* thisPtr, void* level, void* levelChunk);
 typedef int (__fastcall *TileGetResource_fn)(void* thisPtr, int data, void* random, int playerBonusLevel);
@@ -115,6 +117,7 @@ namespace GameHooks
     extern TextureGetSourceDim_fn Original_ClockTextureGetSourceWidth;
     extern TextureGetSourceDim_fn Original_ClockTextureGetSourceHeight;
     extern ItemInstanceMineBlock_fn Original_ItemInstanceMineBlock;
+    extern ItemInstanceUseOn_fn Original_ItemInstanceUseOn;
     extern ItemInstanceSave_fn Original_ItemInstanceSave;
     extern ItemInstanceLoad_fn Original_ItemInstanceLoad;
     extern ItemMineBlock_fn       Original_ItemMineBlock;
@@ -129,6 +132,7 @@ namespace GameHooks
     extern LevelSetTileAndDataDispatch_fn Original_LevelSetTileAndData;
     extern LevelSetDataDispatch_fn Original_LevelSetData;
     extern LevelUpdateNeighborsAtDispatch_fn Original_LevelUpdateNeighborsAt;
+    extern LevelGetData_fn Level_GetData;
     extern ServerLevelTickPendingTicks_fn Original_ServerLevelTickPendingTicks;
     extern TileGetResource_fn Original_TileGetResource;
     extern McRegionChunkStorageLoad_fn Original_McRegionChunkStorageLoad;
@@ -206,6 +210,7 @@ namespace GameHooks
     int __fastcall Hooked_ClockTextureGetSourceWidth(void* thisPtr);
     int __fastcall Hooked_ClockTextureGetSourceHeight(void* thisPtr);
     void __fastcall Hooked_ItemInstanceMineBlock(void* thisPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
+    bool __fastcall Hooked_ItemInstanceUseOn(void* thisPtr, void* playerSharedPtr, void* level, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly);
     void* __fastcall Hooked_ItemInstanceSave(void* thisPtr, void* compoundTagPtr);
     void __fastcall Hooked_ItemInstanceLoad(void* thisPtr, void* compoundTagPtr);
     bool __fastcall Hooked_ItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
