@@ -95,6 +95,8 @@ namespace GameHooks
     PlayerCanDestroy_fn Original_PlayerCanDestroy = nullptr;
     GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem = nullptr;
     GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem = nullptr;
+    ServerPlayerGameModeUseItemOn_fn Original_ServerPlayerGameModeUseItemOn = nullptr;
+    MultiPlayerGameModeUseItemOn_fn Original_MultiPlayerGameModeUseItemOn = nullptr;
     MinecraftSetLevel_fn   Original_MinecraftSetLevel = nullptr;
     TexturesBindTextureResource_fn Original_TexturesBindTextureResource = nullptr;
     TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName = nullptr;
@@ -1915,7 +1917,11 @@ namespace GameHooks
         if (result && tile > 0)
             DispatchManagedBlockById(tile, thisPtr, x, y, z, 0, 0);
 
-        if (result && tile > 0 && Original_LevelSetData)
+        bool isClientSide = false;
+        if (thisPtr && IsReadableRange(static_cast<char*>(thisPtr) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(thisPtr) + kLevelIsClientSideOffset);
+
+        if (result && tile > 0 && Original_LevelSetData && !isClientSide)
         {
             const int profile = ModelRegistry::GetRotationProfile(tile);
             if (profile == 1 || profile == 3)
@@ -2726,7 +2732,11 @@ namespace GameHooks
 
     bool __fastcall Hooked_ItemInstanceUseOn(void* thisPtr, void* playerSharedPtr, void* level, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly)
     {
-        if (!bTestUseOnOnly)
+        bool isClientSide = false;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset);
+
+        if (!bTestUseOnOnly && !isClientSide)
         {
             void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
             if (playerPtr)
@@ -3094,6 +3104,42 @@ namespace GameHooks
             return true;
         if (Original_MultiPlayerGameModeUseItem)
             return Original_MultiPlayerGameModeUseItem(thisPtr, playerSharedPtr, level, itemInstanceSharedPtr, bTestUseOnly);
+        return false;
+    }
+
+    bool __fastcall Hooked_ServerPlayerGameModeUseItemOn(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly, bool* pbUsedItem)
+    {
+        if (!bTestUseOnOnly)
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            if (playerPtr)
+            {
+                s_lastUsePlayer = playerPtr;
+                s_lastUseLevel = level;
+                s_lastUseTimeMs = GetTickCount64();
+            }
+        }
+
+        if (Original_ServerPlayerGameModeUseItemOn)
+            return Original_ServerPlayerGameModeUseItemOn(thisPtr, playerSharedPtr, level, itemInstanceSharedPtr, x, y, z, face, clickX, clickY, clickZ, bTestUseOnOnly, pbUsedItem);
+        return false;
+    }
+
+    bool __fastcall Hooked_MultiPlayerGameModeUseItemOn(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, int x, int y, int z, int face, void* hitVec3Ptr, bool bTestUseOnly, bool* pbUsedItem)
+    {
+        if (!bTestUseOnly)
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            if (playerPtr)
+            {
+                s_lastUsePlayer = playerPtr;
+                s_lastUseLevel = level;
+                s_lastUseTimeMs = GetTickCount64();
+            }
+        }
+
+        if (Original_MultiPlayerGameModeUseItemOn)
+            return Original_MultiPlayerGameModeUseItemOn(thisPtr, playerSharedPtr, level, itemInstanceSharedPtr, x, y, z, face, hitVec3Ptr, bTestUseOnly, pbUsedItem);
         return false;
     }
 

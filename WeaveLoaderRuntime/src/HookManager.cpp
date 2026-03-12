@@ -25,6 +25,8 @@ bool HookManager::Install(const SymbolResolver& symbols)
     WorldIdRemap::SetLevelChunkTileSymbols(
         symbols.Level.pLevelChunkGetTile,
         symbols.Level.pLevelChunkSetTile,
+        symbols.Level.pLevelChunkGetData,
+        symbols.Level.pLevelChunkSetTileAndData,
         symbols.Level.pLevelChunkGetPos,
         symbols.Level.pLevelChunkGetHighestNonEmptyY);
     WorldIdRemap::SetCompressedTileStorageSetSymbol(symbols.Level.pCompressedTileStorageSet);
@@ -109,6 +111,34 @@ bool HookManager::Install(const SymbolResolver& symbols)
         else
         {
             LogUtil::Log("[WeaveLoader] Hooked ItemInstance::mineBlock (managed item callbacks)");
+        }
+    }
+
+    if (symbols.Entity.pServerPlayerGameModeUseItemOn)
+    {
+        if (MH_CreateHook(symbols.Entity.pServerPlayerGameModeUseItemOn,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ServerPlayerGameModeUseItemOn),
+                          reinterpret_cast<void**>(&GameHooks::Original_ServerPlayerGameModeUseItemOn)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ServerPlayerGameMode::useItemOn");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ServerPlayerGameMode::useItemOn (placement tracking)");
+        }
+    }
+
+    if (symbols.Entity.pMultiPlayerGameModeUseItemOn)
+    {
+        if (MH_CreateHook(symbols.Entity.pMultiPlayerGameModeUseItemOn,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_MultiPlayerGameModeUseItemOn),
+                          reinterpret_cast<void**>(&GameHooks::Original_MultiPlayerGameModeUseItemOn)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook MultiPlayerGameMode::useItemOn");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked MultiPlayerGameMode::useItemOn (placement tracking)");
         }
     }
 

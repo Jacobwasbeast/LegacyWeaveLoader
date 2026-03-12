@@ -52,6 +52,8 @@ typedef void* (__fastcall *StoneSlabItemGetIcon_fn)(void* thisPtr, int auxValue)
 typedef unsigned int (__fastcall *StoneSlabItemGetDescriptionId_fn)(void* thisPtr, void* itemInstanceSharedPtr);
 typedef bool (__fastcall *PlayerCanDestroy_fn)(void* thisPtr, void* tilePtr);
 typedef bool (__fastcall *GameModeUseItem_fn)(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
+typedef bool (__fastcall *MultiPlayerGameModeUseItemOn_fn)(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, int x, int y, int z, int face, void* hitVec3Ptr, bool bTestUseOnly, bool* pbUsedItem);
+typedef bool (__fastcall *ServerPlayerGameModeUseItemOn_fn)(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly, bool* pbUsedItem);
 typedef void (__fastcall *MinecraftSetLevel_fn)(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
 typedef bool (__fastcall *LevelAddEntity_fn)(void* thisPtr, void* entitySharedPtr);
 typedef void (__fastcall *EntityMoveTo_fn)(void* thisPtr, double x, double y, double z, float yRot, float xRot);
@@ -154,6 +156,8 @@ namespace GameHooks
     extern PlayerCanDestroy_fn Original_PlayerCanDestroy;
     extern GameModeUseItem_fn     Original_ServerPlayerGameModeUseItem;
     extern GameModeUseItem_fn     Original_MultiPlayerGameModeUseItem;
+    extern ServerPlayerGameModeUseItemOn_fn Original_ServerPlayerGameModeUseItemOn;
+    extern MultiPlayerGameModeUseItemOn_fn Original_MultiPlayerGameModeUseItemOn;
     extern MinecraftSetLevel_fn   Original_MinecraftSetLevel;
     extern TexturesBindTextureResource_fn Original_TexturesBindTextureResource;
     extern TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName;
@@ -246,6 +250,8 @@ namespace GameHooks
     bool __fastcall Hooked_PlayerCanDestroy(void* thisPtr, void* tilePtr);
     bool __fastcall Hooked_ServerPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
     bool __fastcall Hooked_MultiPlayerGameModeUseItem(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, bool bTestUseOnly);
+    bool __fastcall Hooked_ServerPlayerGameModeUseItemOn(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, int x, int y, int z, int face, float clickX, float clickY, float clickZ, bool bTestUseOnOnly, bool* pbUsedItem);
+    bool __fastcall Hooked_MultiPlayerGameModeUseItemOn(void* thisPtr, void* playerSharedPtr, void* level, void* itemInstanceSharedPtr, int x, int y, int z, int face, void* hitVec3Ptr, bool bTestUseOnly, bool* pbUsedItem);
     void __fastcall Hooked_MinecraftSetLevel(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
     void __fastcall Hooked_TexturesBindTextureResource(void* thisPtr, void* resourcePtr);
     int __fastcall Hooked_TexturesLoadTextureByName(void* thisPtr, int texId, const std::wstring& resourceName);

@@ -39,6 +39,8 @@ namespace
     using TagNewTag_fn = void* (__fastcall *)(unsigned char type, const std::wstring& name);
     using LevelChunkGetTile_fn = int (__fastcall *)(void* thisPtr, int x, int y, int z);
     using LevelChunkSetTile_fn = bool (__fastcall *)(void* thisPtr, int x, int y, int z, int tile);
+    using LevelChunkGetData_fn = int (__fastcall *)(void* thisPtr, int x, int y, int z);
+    using LevelChunkSetTileAndData_fn = bool (__fastcall *)(void* thisPtr, int x, int y, int z, int tile, int data);
     using LevelChunkGetPos_fn = void* (__fastcall *)(void* thisPtr);
     using LevelChunkGetHighestNonEmptyY_fn = int (__fastcall *)(void* thisPtr);
     using CompressedTileStorageSet_fn = void (__fastcall *)(void* thisPtr, int x, int y, int z, int val);
@@ -62,6 +64,8 @@ namespace
     void* s_tileArray = nullptr;
     LevelChunkGetTile_fn s_levelChunkGetTile = nullptr;
     LevelChunkSetTile_fn s_levelChunkSetTile = nullptr;
+    LevelChunkGetData_fn s_levelChunkGetData = nullptr;
+    LevelChunkSetTileAndData_fn s_levelChunkSetTileAndData = nullptr;
     LevelChunkGetPos_fn s_levelChunkGetPos = nullptr;
     LevelChunkGetHighestNonEmptyY_fn s_levelChunkGetHighestNonEmptyY = nullptr;
     CompressedTileStorageSet_fn s_compressedTileStorageSet = nullptr;
@@ -460,7 +464,7 @@ namespace
 
     static bool SafeSetChunkTile(void* levelChunkPtr, int x, int y, int z, int tileId)
     {
-        if (!s_levelChunkSetTile)
+        if (!s_levelChunkSetTile && !s_levelChunkSetTileAndData)
             return false;
 
         // If the current block has no valid Tile pointer, setTileAndData will crash when it
@@ -490,7 +494,19 @@ namespace
 #if defined(_MSC_VER)
         __try
         {
-            s_levelChunkSetTile(levelChunkPtr, x, y, z, tileId);
+            if (s_levelChunkSetTileAndData && s_levelChunkGetData)
+            {
+                const int data = s_levelChunkGetData(levelChunkPtr, x, y, z);
+                s_levelChunkSetTileAndData(levelChunkPtr, x, y, z, tileId, data);
+            }
+            else if (s_levelChunkSetTile)
+            {
+                s_levelChunkSetTile(levelChunkPtr, x, y, z, tileId);
+            }
+            else
+            {
+                return false;
+            }
             return true;
         }
         __except (EXCEPTION_EXECUTE_HANDLER)
@@ -498,7 +514,19 @@ namespace
             return false;
         }
 #else
-        s_levelChunkSetTile(levelChunkPtr, x, y, z, tileId);
+        if (s_levelChunkSetTileAndData && s_levelChunkGetData)
+        {
+            const int data = s_levelChunkGetData(levelChunkPtr, x, y, z);
+            s_levelChunkSetTileAndData(levelChunkPtr, x, y, z, tileId, data);
+        }
+        else if (s_levelChunkSetTile)
+        {
+            s_levelChunkSetTile(levelChunkPtr, x, y, z, tileId);
+        }
+        else
+        {
+            return false;
+        }
         return true;
 #endif
     }
@@ -659,10 +687,12 @@ namespace WorldIdRemap
         s_tileArray = tileArrayPtr;
     }
 
-    void SetLevelChunkTileSymbols(void* getTileFn, void* setTileFn, void* getPosFn, void* getHighestNonEmptyYFn)
+    void SetLevelChunkTileSymbols(void* getTileFn, void* setTileFn, void* getDataFn, void* setTileAndDataFn, void* getPosFn, void* getHighestNonEmptyYFn)
     {
         s_levelChunkGetTile = reinterpret_cast<LevelChunkGetTile_fn>(getTileFn);
         s_levelChunkSetTile = reinterpret_cast<LevelChunkSetTile_fn>(setTileFn);
+        s_levelChunkGetData = reinterpret_cast<LevelChunkGetData_fn>(getDataFn);
+        s_levelChunkSetTileAndData = reinterpret_cast<LevelChunkSetTileAndData_fn>(setTileAndDataFn);
         s_levelChunkGetPos = reinterpret_cast<LevelChunkGetPos_fn>(getPosFn);
         s_levelChunkGetHighestNonEmptyY = reinterpret_cast<LevelChunkGetHighestNonEmptyY_fn>(getHighestNonEmptyYFn);
     }

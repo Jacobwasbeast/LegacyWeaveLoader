@@ -122,10 +122,14 @@ namespace
     static const char* SYM_LEVEL_HASNEIGHBORSIGNAL = "?hasNeighborSignal@Level@@QEAA_NHHH@Z";
     static const char* SYM_LEVEL_ADDTOTICKNEXTTICK = "?addToTickNextTick@Level@@UEAAXHHHHH@Z";
     static const char* SYM_SERVERLEVEL_ADDTOTICKNEXTTICK = "?addToTickNextTick@ServerLevel@@UEAAXHHHHH@Z";
+    static const char* SYM_LEVELCHUNK_GETDATA = "?getData@LevelChunk@@UEAAHHHH@Z";
+    static const char* SYM_LEVELCHUNK_SETTILEANDDATA = "?setTileAndData@LevelChunk@@UEAA_NHHHHH@Z";
 
     static const char* SYM_PLAYER_CANDESTROY = "?canDestroy@Player@@QEAA_NPEAVTile@@@Z";
     static const char* SYM_SERVER_PLAYER_GAMEMODE_USEITEM = "?useItem@ServerPlayerGameMode@@QEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
     static const char* SYM_MULTI_PLAYER_GAMEMODE_USEITEM = "?useItem@MultiPlayerGameMode@@UEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@_N@Z";
+    static const char* SYM_SERVER_PLAYER_GAMEMODE_USEITEMON = "?useItemOn@ServerPlayerGameMode@@QEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@HHHHMMM_NPEA_N@Z";
+    static const char* SYM_MULTI_PLAYER_GAMEMODE_USEITEMON = "?useItemOn@MultiPlayerGameMode@@UEAA_NV?$shared_ptr@VPlayer@@@std@@PEAVLevel@@V?$shared_ptr@VItemInstance@@@3@HHHHPEAVVec3@@_NPEA_N@Z";
     static const char* SYM_LEVEL_ADDENTITY = "?addEntity@Level@@UEAA_NV?$shared_ptr@VEntity@@@std@@@Z";
     static const char* SYM_ENTITYIO_NEWBYID = "?newById@EntityIO@@SA?AV?$shared_ptr@VEntity@@@std@@HPEAVLevel@@@Z";
     static const char* SYM_ENTITY_MOVETO = "?moveTo@Entity@@QEAAXNNNMM@Z";
@@ -439,6 +443,12 @@ bool LevelSymbols::Resolve(SymbolResolver& resolver)
     pServerLevelAddToTickNextTick = resolver.Resolve(SYM_SERVERLEVEL_ADDTOTICKNEXTTICK);
     pLevelChunkGetTile = resolver.ResolveExact("LevelChunk::getTile");
     pLevelChunkSetTile = resolver.ResolveExact("LevelChunk::setTile");
+    pLevelChunkGetData = resolver.Resolve(SYM_LEVELCHUNK_GETDATA);
+    if (!pLevelChunkGetData)
+        pLevelChunkGetData = resolver.ResolveExact("LevelChunk::getData");
+    pLevelChunkSetTileAndData = resolver.Resolve(SYM_LEVELCHUNK_SETTILEANDDATA);
+    if (!pLevelChunkSetTileAndData)
+        pLevelChunkSetTileAndData = resolver.ResolveExact("LevelChunk::setTileAndData");
     pLevelChunkGetPos = resolver.ResolveExact("LevelChunk::getPos");
     pLevelChunkGetHighestNonEmptyY = resolver.ResolveExact("LevelChunk::getHighestNonEmptyY");
     pCompressedTileStorageSet = resolver.ResolveExact("CompressedTileStorage::set");
@@ -461,6 +471,8 @@ void LevelSymbols::Log() const
     LogSym("ServerLevel::addToTickNextTick", pServerLevelAddToTickNextTick);
     LogSym("LevelChunk::getTile", pLevelChunkGetTile);
     LogSym("LevelChunk::setTile", pLevelChunkSetTile);
+    LogSym("LevelChunk::getData", pLevelChunkGetData);
+    LogSym("LevelChunk::setTileAndData", pLevelChunkSetTileAndData);
     LogSym("LevelChunk::getPos", pLevelChunkGetPos);
     LogSym("LevelChunk::getHighestNonEmptyY", pLevelChunkGetHighestNonEmptyY);
     LogSym("CompressedTileStorage::set", pCompressedTileStorageSet);
@@ -471,6 +483,8 @@ bool EntitySymbols::Resolve(SymbolResolver& resolver)
     pPlayerCanDestroy = resolver.Resolve(SYM_PLAYER_CANDESTROY);
     pServerPlayerGameModeUseItem = resolver.Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEM);
     pMultiPlayerGameModeUseItem = resolver.Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEM);
+    pServerPlayerGameModeUseItemOn = resolver.Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEMON);
+    pMultiPlayerGameModeUseItemOn = resolver.Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEMON);
     pLevelAddEntity = resolver.Resolve(SYM_LEVEL_ADDENTITY);
     pEntityIONewById = resolver.Resolve(SYM_ENTITYIO_NEWBYID);
     pEntityMoveTo = resolver.Resolve(SYM_ENTITY_MOVETO);
@@ -492,6 +506,8 @@ void EntitySymbols::Log() const
     LogSym("Player::canDestroy", pPlayerCanDestroy);
     LogSym("ServerPlayerGameMode::useItem", pServerPlayerGameModeUseItem);
     LogSym("MultiPlayerGameMode::useItem", pMultiPlayerGameModeUseItem);
+    LogSym("ServerPlayerGameMode::useItemOn", pServerPlayerGameModeUseItemOn);
+    LogSym("MultiPlayerGameMode::useItemOn", pMultiPlayerGameModeUseItemOn);
     LogSym("Level::addEntity", pLevelAddEntity);
     LogSym("EntityIO::newById", pEntityIONewById);
     LogSym("Entity::moveTo", pEntityMoveTo);

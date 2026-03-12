@@ -150,6 +150,8 @@ struct LevelSymbols
     void* pServerLevelAddToTickNextTick = nullptr;
     void* pLevelChunkGetTile = nullptr;
     void* pLevelChunkSetTile = nullptr;
+    void* pLevelChunkGetData = nullptr;
+    void* pLevelChunkSetTileAndData = nullptr;
     void* pLevelChunkGetPos = nullptr;
     void* pLevelChunkGetHighestNonEmptyY = nullptr;
     void* pCompressedTileStorageSet = nullptr;
@@ -163,6 +165,8 @@ struct EntitySymbols
     void* pPlayerCanDestroy = nullptr;
     void* pServerPlayerGameModeUseItem = nullptr;
     void* pMultiPlayerGameModeUseItem = nullptr;
+    void* pServerPlayerGameModeUseItemOn = nullptr;
+    void* pMultiPlayerGameModeUseItemOn = nullptr;
     void* pLevelAddEntity = nullptr;
     void* pEntityIONewById = nullptr;
     void* pEntityMoveTo = nullptr;
