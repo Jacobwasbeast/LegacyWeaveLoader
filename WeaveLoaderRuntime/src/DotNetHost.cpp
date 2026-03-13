@@ -24,9 +24,24 @@ static managed_entry_fn fn_Tick = nullptr;
 static managed_entry_fn fn_Shutdown = nullptr;
 static managed_entry_fn fn_ItemMineBlock = nullptr;
 static managed_entry_fn fn_ItemUse = nullptr;
+static managed_entry_fn fn_ItemUseOn = nullptr;
+static managed_entry_fn fn_ItemInteractEntity = nullptr;
+static managed_entry_fn fn_ItemHurtEntity = nullptr;
+static managed_entry_fn fn_ItemInventoryTick = nullptr;
+static managed_entry_fn fn_ItemCraftedBy = nullptr;
 static managed_entry_fn fn_BlockOnPlace = nullptr;
 static managed_entry_fn fn_BlockNeighborChanged = nullptr;
 static managed_entry_fn fn_BlockTick = nullptr;
+static managed_entry_fn fn_BlockUse = nullptr;
+static managed_entry_fn fn_BlockStepOn = nullptr;
+static managed_entry_fn fn_BlockEntityInsideTile = nullptr;
+static managed_entry_fn fn_BlockFallOn = nullptr;
+static managed_entry_fn fn_BlockRemoving = nullptr;
+static managed_entry_fn fn_BlockRemoved = nullptr;
+static managed_entry_fn fn_BlockDestroyed = nullptr;
+static managed_entry_fn fn_BlockPlayerDestroy = nullptr;
+static managed_entry_fn fn_BlockPlayerWillDestroy = nullptr;
+static managed_entry_fn fn_BlockPlacedBy = nullptr;
 static managed_entry_fn fn_EntitySummoned = nullptr;
 
 static bool LoadHostfxr()
@@ -185,9 +200,24 @@ bool DotNetHost::Initialize()
     ok &= resolve(L"Shutdown", &fn_Shutdown);
     ok &= resolve(L"OnItemMineBlock", &fn_ItemMineBlock);
     ok &= resolve(L"OnItemUse", &fn_ItemUse);
+    ok &= resolve(L"OnItemUseOn", &fn_ItemUseOn);
+    ok &= resolve(L"OnItemInteractEntity", &fn_ItemInteractEntity);
+    ok &= resolve(L"OnItemHurtEntity", &fn_ItemHurtEntity);
+    ok &= resolve(L"OnItemInventoryTick", &fn_ItemInventoryTick);
+    ok &= resolve(L"OnItemCraftedBy", &fn_ItemCraftedBy);
     ok &= resolve(L"OnBlockPlace", &fn_BlockOnPlace);
     ok &= resolve(L"OnBlockNeighborChanged", &fn_BlockNeighborChanged);
     ok &= resolve(L"OnBlockTick", &fn_BlockTick);
+    ok &= resolve(L"OnBlockUse", &fn_BlockUse);
+    ok &= resolve(L"OnBlockStepOn", &fn_BlockStepOn);
+    ok &= resolve(L"OnBlockEntityInsideTile", &fn_BlockEntityInsideTile);
+    ok &= resolve(L"OnBlockFallOn", &fn_BlockFallOn);
+    ok &= resolve(L"OnBlockRemoving", &fn_BlockRemoving);
+    ok &= resolve(L"OnBlockRemoved", &fn_BlockRemoved);
+    ok &= resolve(L"OnBlockDestroyed", &fn_BlockDestroyed);
+    ok &= resolve(L"OnBlockPlayerDestroy", &fn_BlockPlayerDestroy);
+    ok &= resolve(L"OnBlockPlayerWillDestroy", &fn_BlockPlayerWillDestroy);
+    ok &= resolve(L"OnBlockPlacedBy", &fn_BlockPlacedBy);
     ok &= resolve(L"OnEntitySummoned", &fn_EntitySummoned);
 
     if (!ok)
@@ -253,6 +283,41 @@ int DotNetHost::CallItemUse(const void* args, int sizeBytes)
     return fn_ItemUse(const_cast<void*>(args), sizeBytes);
 }
 
+int DotNetHost::CallItemUseOn(const void* args, int sizeBytes)
+{
+    if (!fn_ItemUseOn || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemUseOn(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallItemInteractEntity(const void* args, int sizeBytes)
+{
+    if (!fn_ItemInteractEntity || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemInteractEntity(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallItemHurtEntity(const void* args, int sizeBytes)
+{
+    if (!fn_ItemHurtEntity || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemHurtEntity(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallItemInventoryTick(const void* args, int sizeBytes)
+{
+    if (!fn_ItemInventoryTick || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemInventoryTick(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallItemCraftedBy(const void* args, int sizeBytes)
+{
+    if (!fn_ItemCraftedBy || !args || sizeBytes <= 0)
+        return 0;
+    return fn_ItemCraftedBy(const_cast<void*>(args), sizeBytes);
+}
+
 int DotNetHost::CallBlockOnPlace(const void* args, int sizeBytes)
 {
     if (!fn_BlockOnPlace || !args || sizeBytes <= 0)
@@ -273,6 +338,77 @@ int DotNetHost::CallBlockTick(const void* args, int sizeBytes)
         return 0;
     return fn_BlockTick(const_cast<void*>(args), sizeBytes);
 }
+
+int DotNetHost::CallBlockUse(const void* args, int sizeBytes)
+{
+    if (!fn_BlockUse || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockUse(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockStepOn(const void* args, int sizeBytes)
+{
+    if (!fn_BlockStepOn || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockStepOn(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockEntityInsideTile(const void* args, int sizeBytes)
+{
+    if (!fn_BlockEntityInsideTile || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockEntityInsideTile(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockFallOn(const void* args, int sizeBytes)
+{
+    if (!fn_BlockFallOn || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockFallOn(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockRemoving(const void* args, int sizeBytes)
+{
+    if (!fn_BlockRemoving || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockRemoving(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockRemoved(const void* args, int sizeBytes)
+{
+    if (!fn_BlockRemoved || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockRemoved(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockDestroyed(const void* args, int sizeBytes)
+{
+    if (!fn_BlockDestroyed || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockDestroyed(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockPlayerDestroy(const void* args, int sizeBytes)
+{
+    if (!fn_BlockPlayerDestroy || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockPlayerDestroy(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockPlayerWillDestroy(const void* args, int sizeBytes)
+{
+    if (!fn_BlockPlayerWillDestroy || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockPlayerWillDestroy(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockPlacedBy(const void* args, int sizeBytes)
+{
+    if (!fn_BlockPlacedBy || !args || sizeBytes <= 0)
+        return 0;
+    return fn_BlockPlacedBy(const_cast<void*>(args), sizeBytes);
+}
+
 
 void DotNetHost::CallEntitySummoned(int entityNumericId, float x, float y, float z)
 {

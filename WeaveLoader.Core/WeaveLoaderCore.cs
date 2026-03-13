@@ -123,6 +123,71 @@ public static class WeaveLoaderCore
         }
     }
 
+    public static int OnItemUseOn(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleUseOn(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemUseOn EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnItemInteractEntity(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleInteractEntity(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemInteractEntity EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnItemHurtEntity(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleHurtEntity(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemHurtEntity EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnItemInventoryTick(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleInventoryTick(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemInventoryTick EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnItemCraftedBy(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedItemDispatcher.HandleCraftedBy(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnItemCraftedBy EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
     public static int OnBlockPlace(IntPtr args, int sizeBytes)
     {
         try
@@ -158,6 +223,136 @@ public static class WeaveLoaderCore
         catch (Exception ex)
         {
             Logger.Error($"OnBlockTick EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockUse(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleUse(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockUse EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockStepOn(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleStepOn(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockStepOn EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockEntityInsideTile(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleEntityInsideTile(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockEntityInsideTile EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockFallOn(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleFallOn(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockFallOn EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockRemoving(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleRemoving(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockRemoving EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockRemoved(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleRemoved(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockRemoved EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockDestroyed(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandleDestroyed(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockDestroyed EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockPlayerDestroy(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandlePlayerDestroy(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockPlayerDestroy EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockPlayerWillDestroy(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandlePlayerWillDestroy(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockPlayerWillDestroy EXCEPTION: {ex}");
+            return 0;
+        }
+    }
+
+    public static int OnBlockPlacedBy(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            return ManagedBlockDispatcher.HandlePlacedBy(args, sizeBytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"OnBlockPlacedBy EXCEPTION: {ex}");
             return 0;
         }
     }

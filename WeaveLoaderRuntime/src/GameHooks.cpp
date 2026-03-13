@@ -14,6 +14,7 @@
 #include "WorldIdRemap.h"
 #include "ModelRegistry.h"
 #include "ItemRenderRegistry.h"
+#include "PdbParser.h"
 #include <Windows.h>
 #include <gl/GL.h>
 #include <string>
@@ -33,6 +34,7 @@
 #include <fstream>
 #include <cmath>
 #include <vector>
+#include <intrin.h>
 
 namespace GameHooks
 {
@@ -66,6 +68,10 @@ namespace GameHooks
     ItemInstanceUseOn_fn Original_ItemInstanceUseOn = nullptr;
     ItemInstanceSave_fn Original_ItemInstanceSave = nullptr;
     ItemInstanceLoad_fn Original_ItemInstanceLoad = nullptr;
+    ItemInstanceInventoryTick_fn Original_ItemInstanceInventoryTick = nullptr;
+    ItemInstanceOnCraftedBy_fn Original_ItemInstanceOnCraftedBy = nullptr;
+    ItemInstanceInteractEnemy_fn Original_ItemInstanceInteractEnemy = nullptr;
+    ItemInstanceHurtEnemy_fn Original_ItemInstanceHurtEnemy = nullptr;
     ItemMineBlock_fn       Original_ItemMineBlock = nullptr;
     ItemMineBlock_fn       Original_DiggerItemMineBlock = nullptr;
     PickaxeGetDestroySpeed_fn Original_PickaxeItemGetDestroySpeed = nullptr;
@@ -75,6 +81,18 @@ namespace GameHooks
     TileOnPlace_fn Original_TileOnPlace = nullptr;
     TileNeighborChanged_fn Original_TileNeighborChanged = nullptr;
     TileTick_fn Original_TileTick = nullptr;
+    TileUse_fn Original_TileUse = nullptr;
+    TileStepOn_fn Original_TileStepOn = nullptr;
+    TileEntityInside_fn Original_TileEntityInside = nullptr;
+    TileFallOn_fn Original_TileFallOn = nullptr;
+    TileOnRemoving_fn Original_TileOnRemoving = nullptr;
+    TileOnRemove_fn Original_TileOnRemove = nullptr;
+    TileDestroy_fn Original_TileDestroy = nullptr;
+    TilePlayerDestroy_fn Original_TilePlayerDestroy = nullptr;
+    TilePlayerWillDestroy_fn Original_TilePlayerWillDestroy = nullptr;
+    TileSetPlacedBy_fn Original_TileSetPlacedBy = nullptr;
+    TileSharedAction_fn Original_TileSharedAction = nullptr;
+    TileSharedLifecycle_fn Original_TileSharedLifecycle = nullptr;
     LevelSetTileAndDataDispatch_fn Original_LevelSetTileAndData = nullptr;
     LevelSetDataDispatch_fn Original_LevelSetData = nullptr;
     LevelUpdateNeighborsAtDispatch_fn Original_LevelUpdateNeighborsAt = nullptr;
@@ -104,6 +122,8 @@ namespace GameHooks
     ServerPlayerGameModeUseItemOn_fn Original_ServerPlayerGameModeUseItemOn = nullptr;
     MultiPlayerGameModeUseItemOn_fn Original_MultiPlayerGameModeUseItemOn = nullptr;
     MinecraftSetLevel_fn   Original_MinecraftSetLevel = nullptr;
+    EntityPlayStepSound_fn Original_EntityPlayStepSound = nullptr;
+    EntityCheckInsideTiles_fn Original_EntityCheckInsideTiles = nullptr;
     TexturesBindTextureResource_fn Original_TexturesBindTextureResource = nullptr;
     TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName = nullptr;
     TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex = nullptr;
@@ -257,6 +277,10 @@ namespace GameHooks
         static int s_tileRendererLevelOffset = -1;
         static std::atomic<bool> s_entityYawOffsetTried{false};
         static int s_entityYawOffset = -1;
+        static std::atomic<bool> s_entityLevelOffsetTried{false};
+        static int s_entityLevelOffset = -1;
+        static std::atomic<bool> s_entityBbOffsetTried{false};
+        static int s_entityBbOffset = -1;
         static int s_rotationLogCount = 0;
 
         static bool ReadFileToString(const char* path, std::string& out)
@@ -414,6 +438,67 @@ namespace GameHooks
             return true;
         }
 
+        static bool TryResolveEntityLevelOffset()
+        {
+            bool expected = false;
+            if (!s_entityLevelOffsetTried.compare_exchange_strong(expected, true))
+                return s_entityLevelOffset >= 0;
+
+            const char* baseDir = LogUtil::GetBaseDir();
+            if (!baseDir || baseDir[0] == '\0')
+                return false;
+
+            std::string json;
+            std::string path = std::string(baseDir) + "metadata\\offsets.json";
+            if (!ReadFileToString(path.c_str(), json))
+            {
+                path = std::string(baseDir) + "offsets.json";
+                if (!ReadFileToString(path.c_str(), json))
+                    return false;
+            }
+
+            int offset = -1;
+            if (!ExtractOffsetForField(json, "Entity", "level", offset))
+                return false;
+            if (offset <= 0)
+                return false;
+
+            s_entityLevelOffset = offset;
+            LogUtil::Log("[WeaveLoader] ModelRegistry: Entity.level offset = 0x%X", s_entityLevelOffset);
+            return true;
+        }
+
+        static bool TryResolveEntityBbOffset()
+        {
+            bool expected = false;
+            if (!s_entityBbOffsetTried.compare_exchange_strong(expected, true))
+                return s_entityBbOffset >= 0;
+
+            const char* baseDir = LogUtil::GetBaseDir();
+            if (!baseDir || baseDir[0] == '\0')
+                return false;
+
+            std::string json;
+            std::string path = std::string(baseDir) + "metadata\\offsets.json";
+            if (!ReadFileToString(path.c_str(), json))
+            {
+                path = std::string(baseDir) + "offsets.json";
+                if (!ReadFileToString(path.c_str(), json))
+                    return false;
+            }
+
+            int offset = -1;
+            if (!ExtractOffsetForField(json, "Entity", "bb", offset))
+                return false;
+            if (offset <= 0)
+                return false;
+
+            s_entityBbOffset = offset;
+            LogUtil::Log("[WeaveLoader] ModelRegistry: Entity.bb offset = 0x%X", s_entityBbOffset);
+            return true;
+        }
+
+
         int GetTileId(void* tilePtr)
         {
             if (!tilePtr)
@@ -448,6 +533,52 @@ namespace GameHooks
             outYaw = *reinterpret_cast<const float*>(base);
             return true;
         }
+
+        static bool TryGetEntityLevel(void* entityPtr, void*& outLevelPtr)
+        {
+            outLevelPtr = nullptr;
+            if (!entityPtr)
+                return false;
+            if (s_entityLevelOffset < 0 && !TryResolveEntityLevelOffset())
+                return false;
+
+            const char* base = reinterpret_cast<const char*>(entityPtr) + s_entityLevelOffset;
+            if (!IsReadableRange(base, sizeof(void*)))
+                return false;
+
+            outLevelPtr = *reinterpret_cast<void* const*>(base);
+            return outLevelPtr != nullptr;
+        }
+
+        static bool TryGetEntityAABB(void* entityPtr, AABBRaw& outBox)
+        {
+            if (!entityPtr)
+                return false;
+            if (s_entityBbOffset < 0 && !TryResolveEntityBbOffset())
+                return false;
+
+            const char* base = reinterpret_cast<const char*>(entityPtr) + s_entityBbOffset;
+            if (!IsReadableRange(base, sizeof(void*)))
+                return false;
+
+            void* boxPtr = *reinterpret_cast<void* const*>(base);
+            if (!IsReadableRange(boxPtr, sizeof(AABBRaw)))
+                return false;
+
+            outBox = *reinterpret_cast<const AABBRaw*>(boxPtr);
+            return true;
+        }
+
+        static uint64_t MakeEntityInsideKey(void* levelPtr, void* entityPtr, int x, int y, int z)
+        {
+            uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(entityPtr));
+            h ^= static_cast<uint64_t>(reinterpret_cast<uintptr_t>(levelPtr)) * 0x9E3779B97F4A7C15ULL;
+            h ^= static_cast<uint64_t>(static_cast<int64_t>(x) * 73856093LL);
+            h ^= static_cast<uint64_t>(static_cast<int64_t>(y) * 19349663LL);
+            h ^= static_cast<uint64_t>(static_cast<int64_t>(z) * 83492791LL);
+            return h;
+        }
+
 
         static const char* FacingFromDoorDir(int dir)
         {
@@ -651,7 +782,13 @@ namespace GameHooks
     static thread_local void* s_activeUseLevel = nullptr;
     static thread_local void* s_lastUsePlayer = nullptr;
     static thread_local void* s_lastUseLevel = nullptr;
+    static thread_local void* s_lastUseItemInstance = nullptr;
     static thread_local ULONGLONG s_lastUseTimeMs = 0;
+    static thread_local void* s_lastPlacedLevel = nullptr;
+    static thread_local int s_lastPlacedX = 0;
+    static thread_local int s_lastPlacedY = 0;
+    static thread_local int s_lastPlacedZ = 0;
+    static thread_local ULONGLONG s_lastPlacedTimeMs = 0;
     static LevelAddEntity_fn s_levelAddEntity = nullptr;
     static EntityIONewById_fn s_entityIoNewById = nullptr;
     static EntityMoveTo_fn s_entityMoveTo = nullptr;
@@ -720,6 +857,9 @@ namespace GameHooks
     static int s_outOfWorldGuardLogCount = 0;
     static int s_pendingServerUseItemId = -1;
     static LevelGetTile_fn s_levelGetTile = nullptr;
+    static std::atomic<uint32_t> s_tickCounter{0};
+    static std::unordered_map<uint64_t, uint32_t> s_entityInsideSeen;
+    static uint32_t s_entityInsideCleanupTick = 0;
 
     struct ManagedScheduledTick
     {
@@ -1211,11 +1351,58 @@ namespace GameHooks
     struct UseItemNativeArgs
     {
         int itemId;
-        int isTestUseOnly;
         int isClientSide;
         void* itemInstancePtr;
         void* playerPtr;
         void* playerSharedPtr;
+    };
+
+    struct UseOnItemNativeArgs
+    {
+        int itemId;
+        int isClientSide;
+        void* itemInstancePtr;
+        void* playerPtr;
+        void* playerSharedPtr;
+        void* levelPtr;
+        int x;
+        int y;
+        int z;
+        int face;
+        float clickX;
+        float clickY;
+        float clickZ;
+    };
+
+    struct ItemEntityInteractionNativeArgs
+    {
+        int itemId;
+        void* itemInstancePtr;
+        void* playerPtr;
+        void* playerSharedPtr;
+        void* targetEntityPtr;
+    };
+
+    struct ItemInventoryTickNativeArgs
+    {
+        int itemId;
+        void* itemInstancePtr;
+        void* levelPtr;
+        void* ownerEntityPtr;
+        int slot;
+        int isSelected;
+        int isClientSide;
+    };
+
+    struct ItemCraftedByNativeArgs
+    {
+        int itemId;
+        void* itemInstancePtr;
+        void* levelPtr;
+        void* playerPtr;
+        void* playerSharedPtr;
+        int amount;
+        int isClientSide;
     };
 
     struct ItemRenderNativeArgs
@@ -1231,10 +1418,86 @@ namespace GameHooks
         float alpha;
     };
 
+    struct BlockUpdateNativeArgs
+    {
+        int blockId;
+        int isClientSide;
+        void* levelPtr;
+        int x;
+        int y;
+        int z;
+    };
+
+    struct BlockUseNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        void* playerPtr;
+        int face;
+        float clickX;
+        float clickY;
+        float clickZ;
+        int soundOnly;
+    };
+
+
+    struct BlockEntityNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        void* entityPtr;
+    };
+
+    struct BlockFallNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        void* entityPtr;
+        float fallDistance;
+    };
+
+    struct BlockRemovingNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        int blockData;
+    };
+
+    struct BlockRemoveNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        int removedBlockId;
+        int removedBlockData;
+    };
+
+    struct BlockDestroyNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        int blockData;
+    };
+
+    struct BlockPlayerDestroyNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        void* playerPtr;
+        int blockData;
+    };
+
+    struct BlockPlayerWillDestroyNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        void* playerPtr;
+        int blockData;
+    };
+
+    struct BlockPlacedByNativeArgs
+    {
+        BlockUpdateNativeArgs block;
+        void* placerPtr;
+        void* itemInstancePtr;
+    };
+
     static bool IsFireballFamilyEntityId(int entityNumericId);
     static bool LooksLikeEntityPtr(void* candidate);
     static void* DecodeItemInstancePtrFromSharedArg(void* sharedArg);
     static void* DecodePlayerPtrFromSharedArg(void* sharedArg);
+    static bool WasRecentlyPlaced(void* levelPtr, int x, int y, int z);
 
     static bool TryReadItemId(void* itemInstancePtr, int& outItemId)
     {
@@ -1407,6 +1670,9 @@ namespace GameHooks
 
     static int TryDispatchUseItemFromSharedItemArg(void* itemInstanceSharedPtr, void* playerSharedPtr, bool bTestUseOnly, const char* sourceTag)
     {
+        if (bTestUseOnly)
+            return 0;
+
         void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
         void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
         if (!itemInstancePtr)
@@ -1424,7 +1690,7 @@ namespace GameHooks
                 *reinterpret_cast<bool*>(static_cast<char*>(s_activeUseLevel) + kLevelIsClientSideOffset) ? 1 : 0;
         }
 
-        UseItemNativeArgs args{ itemId, bTestUseOnly ? 1 : 0, isClientSide, itemInstancePtr, playerPtr, playerSharedPtr };
+        UseItemNativeArgs args{ itemId, isClientSide, itemInstancePtr, playerPtr, playerSharedPtr };
         return DotNetHost::CallItemUse(&args, sizeof(args));
     }
 
@@ -1945,15 +2211,6 @@ namespace GameHooks
         if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
             isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
 
-        struct BlockUpdateNativeArgs
-        {
-            int blockId;
-            int isClientSide;
-            void* levelPtr;
-            int x;
-            int y;
-            int z;
-        };
         struct BlockNeighborChangedNativeArgs
         {
             BlockUpdateNativeArgs block;
@@ -1988,15 +2245,6 @@ namespace GameHooks
         if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
             isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
 
-        struct BlockUpdateNativeArgs
-        {
-            int blockId;
-            int isClientSide;
-            void* levelPtr;
-            int x;
-            int y;
-            int z;
-        };
         struct BlockNeighborChangedNativeArgs
         {
             BlockUpdateNativeArgs block;
@@ -2022,6 +2270,104 @@ namespace GameHooks
         }
     }
 
+    enum class TileSharedActionKind
+    {
+        Unknown = 0,
+        StepOn,
+        EntityInside,
+        FallOn
+    };
+
+    enum class TileSharedLifecycleKind
+    {
+        Unknown = 0,
+        Destroyed
+    };
+
+    static std::unordered_map<void*, TileSharedActionKind> s_tileSharedActionCache;
+    static std::unordered_map<void*, TileSharedLifecycleKind> s_tileSharedLifecycleCache;
+    static std::mutex s_tileSharedActionMutex;
+    static std::mutex s_tileSharedLifecycleMutex;
+    static uintptr_t s_moduleBase = 0;
+
+    static bool TryResolveCallerName(void* returnAddr, char* outName, size_t nameSize, uint32_t* outOffset)
+    {
+        if (!returnAddr)
+            return false;
+        if (!s_moduleBase)
+            s_moduleBase = reinterpret_cast<uintptr_t>(GetModuleHandleA(nullptr));
+        if (!s_moduleBase)
+            return false;
+
+        const uintptr_t addr = reinterpret_cast<uintptr_t>(returnAddr);
+        if (addr < s_moduleBase)
+            return false;
+
+        const uint32_t rva = static_cast<uint32_t>(addr - s_moduleBase);
+        return PdbParser::FindNameByRVA(rva, outName, nameSize, outOffset);
+    }
+
+    static TileSharedActionKind ResolveTileSharedActionKind(void* returnAddr)
+    {
+        if (!returnAddr)
+            return TileSharedActionKind::Unknown;
+
+        {
+            std::lock_guard<std::mutex> guard(s_tileSharedActionMutex);
+            auto it = s_tileSharedActionCache.find(returnAddr);
+            if (it != s_tileSharedActionCache.end())
+                return it->second;
+        }
+
+        TileSharedActionKind kind = TileSharedActionKind::Unknown;
+        char name[128] = {};
+        uint32_t offset = 0;
+        if (TryResolveCallerName(returnAddr, name, sizeof(name), &offset))
+        {
+            if (std::strstr(name, "Entity::move") != nullptr)
+                kind = TileSharedActionKind::StepOn;
+            else if (std::strstr(name, "Entity::checkInsideTiles") != nullptr)
+                kind = TileSharedActionKind::EntityInside;
+            else if (std::strstr(name, "LivingEntity::checkFallDamage") != nullptr)
+                kind = TileSharedActionKind::FallOn;
+        }
+
+        {
+            std::lock_guard<std::mutex> guard(s_tileSharedActionMutex);
+            s_tileSharedActionCache[returnAddr] = kind;
+        }
+        return kind;
+    }
+
+    static TileSharedLifecycleKind ResolveTileSharedLifecycleKind(void* returnAddr)
+    {
+        if (!returnAddr)
+            return TileSharedLifecycleKind::Unknown;
+
+        {
+            std::lock_guard<std::mutex> guard(s_tileSharedLifecycleMutex);
+            auto it = s_tileSharedLifecycleCache.find(returnAddr);
+            if (it != s_tileSharedLifecycleCache.end())
+                return it->second;
+        }
+
+        TileSharedLifecycleKind kind = TileSharedLifecycleKind::Unknown;
+        char name[128] = {};
+        uint32_t offset = 0;
+        if (TryResolveCallerName(returnAddr, name, sizeof(name), &offset))
+        {
+            if (std::strstr(name, "ServerPlayerGameMode::destroyBlock") != nullptr ||
+                std::strstr(name, "MultiPlayerGameMode::destroyBlock") != nullptr)
+                kind = TileSharedLifecycleKind::Destroyed;
+        }
+
+        {
+            std::lock_guard<std::mutex> guard(s_tileSharedLifecycleMutex);
+            s_tileSharedLifecycleCache[returnAddr] = kind;
+        }
+        return kind;
+    }
+
     void __fastcall Hooked_TileOnPlace(void* thisPtr, void* level, int x, int y, int z)
     {
         if (Original_TileOnPlace)
@@ -2043,10 +2389,385 @@ namespace GameHooks
         DispatchManagedBlockUpdate(thisPtr, level, x, y, z, 2, 0);
     }
 
-    static bool TryGetPlacementPlayer(void* levelPtr, void*& outPlayerPtr)
+    bool __fastcall Hooked_TileUse(void* thisPtr, void* level, int x, int y, int z, void* playerSharedPtr, int face, float clickX, float clickY, float clickZ, bool soundOnly)
     {
-        (void)levelPtr;
-        if (!s_lastUsePlayer)
+        const int blockId = TryReadTileId(thisPtr);
+        if (ManagedBlockRegistry::IsManaged(blockId))
+        {
+            int isClientSide = 0;
+            if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+                isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            BlockUseNativeArgs args{};
+            args.block = { blockId, isClientSide, level, x, y, z };
+            args.playerPtr = playerPtr;
+            args.face = face;
+            args.clickX = clickX;
+            args.clickY = clickY;
+            args.clickZ = clickZ;
+            args.soundOnly = soundOnly ? 1 : 0;
+
+            int action = DotNetHost::CallBlockUse(&args, sizeof(args));
+            if (action == 2)
+                return true;
+        }
+
+        if (Original_TileUse)
+            return Original_TileUse(thisPtr, level, x, y, z, playerSharedPtr, face, clickX, clickY, clickZ, soundOnly);
+        return false;
+    }
+
+    void __fastcall Hooked_TileSharedAction(void* thisPtr, void* level, int x, int y, int z, void* entitySharedPtr, float fallDistance)
+    {
+        const TileSharedActionKind kind = ResolveTileSharedActionKind(_ReturnAddress());
+        if (kind == TileSharedActionKind::Unknown)
+        {
+            if (Original_TileSharedAction)
+                Original_TileSharedAction(thisPtr, level, x, y, z, entitySharedPtr, fallDistance);
+            return;
+        }
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+        {
+            if (Original_TileSharedAction)
+                Original_TileSharedAction(thisPtr, level, x, y, z, entitySharedPtr, fallDistance);
+            return;
+        }
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        if (Original_TileSharedAction)
+            Original_TileSharedAction(thisPtr, level, x, y, z, entitySharedPtr, fallDistance);
+
+        if (kind == TileSharedActionKind::StepOn)
+        {
+            void* entityPtr = DecodeEntityPtrFromSharedArg(entitySharedPtr);
+            BlockEntityNativeArgs args{};
+            args.block = { blockId, isClientSide, level, x, y, z };
+            args.entityPtr = entityPtr;
+            DotNetHost::CallBlockStepOn(&args, sizeof(args));
+        }
+        else if (kind == TileSharedActionKind::FallOn)
+        {
+            void* entityPtr = DecodeEntityPtrFromSharedArg(entitySharedPtr);
+            BlockFallNativeArgs args{};
+            args.block = { blockId, isClientSide, level, x, y, z };
+            args.entityPtr = entityPtr;
+            args.fallDistance = fallDistance;
+            DotNetHost::CallBlockFallOn(&args, sizeof(args));
+        }
+    }
+
+    void __fastcall Hooked_TileSharedLifecycle(void* thisPtr, void* level, int x, int y, int z, void* arg5, void* arg6)
+    {
+        if (Original_TileSharedLifecycle)
+            Original_TileSharedLifecycle(thisPtr, level, x, y, z, arg5, arg6);
+
+        TileSharedLifecycleKind kind = ResolveTileSharedLifecycleKind(_ReturnAddress());
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        if (kind == TileSharedLifecycleKind::Unknown)
+            return;
+
+        if (kind == TileSharedLifecycleKind::Destroyed)
+        {
+            BlockDestroyNativeArgs args{};
+            args.block = { blockId, isClientSide, level, x, y, z };
+            args.blockData = static_cast<int>(reinterpret_cast<intptr_t>(arg5));
+            DotNetHost::CallBlockDestroyed(&args, sizeof(args));
+        }
+    }
+
+    void __fastcall Hooked_EntityPlayStepSound(void* thisPtr, int xt, int yt, int zt, int t)
+    {
+        if (Original_EntityPlayStepSound)
+            Original_EntityPlayStepSound(thisPtr, xt, yt, zt, t);
+
+        if (t <= 0 || !ManagedBlockRegistry::IsManaged(t))
+            return;
+
+        void* level = nullptr;
+        if (!TryGetEntityLevel(thisPtr, level))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        BlockEntityNativeArgs args{};
+        args.block = { t, isClientSide, level, xt, yt, zt };
+        args.entityPtr = thisPtr;
+        DotNetHost::CallBlockStepOn(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_EntityCheckInsideTiles(void* thisPtr)
+    {
+        if (Original_EntityCheckInsideTiles)
+            Original_EntityCheckInsideTiles(thisPtr);
+
+        if (!thisPtr || !s_levelGetTile)
+            return;
+
+        void* level = nullptr;
+        if (!TryGetEntityLevel(thisPtr, level))
+            return;
+
+        AABBRaw box{};
+        if (!TryGetEntityAABB(thisPtr, box))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        const double eps = 1e-7;
+        int minX = static_cast<int>(std::floor(box.x0 + eps));
+        int minY = static_cast<int>(std::floor(box.y0 + eps));
+        int minZ = static_cast<int>(std::floor(box.z0 + eps));
+        int maxX = static_cast<int>(std::floor(box.x1 - eps));
+        int maxY = static_cast<int>(std::floor(box.y1 - eps));
+        int maxZ = static_cast<int>(std::floor(box.z1 - eps));
+
+        if (maxY < 0 || minY > 255)
+            return;
+        minY = (std::max)(minY, 0);
+        maxY = (std::min)(maxY, 255);
+
+        const uint32_t tick = s_tickCounter.load(std::memory_order_relaxed);
+        if (tick != s_entityInsideCleanupTick && s_entityInsideSeen.size() > 200000)
+        {
+            s_entityInsideSeen.clear();
+            s_entityInsideCleanupTick = tick;
+        }
+
+        for (int y = minY; y <= maxY; ++y)
+        {
+            for (int z = minZ; z <= maxZ; ++z)
+            {
+                for (int x = minX; x <= maxX; ++x)
+                {
+                    const int blockId = s_levelGetTile(level, x, y, z);
+                    if (blockId <= 0 || !ManagedBlockRegistry::IsManaged(blockId))
+                        continue;
+
+                    if (!Intersects(&box, static_cast<double>(x), static_cast<double>(y), static_cast<double>(z),
+                                    static_cast<double>(x + 1), static_cast<double>(y + 1), static_cast<double>(z + 1)))
+                        continue;
+
+                    const uint64_t key = MakeEntityInsideKey(level, thisPtr, x, y, z);
+                    auto it = s_entityInsideSeen.find(key);
+                    if (it != s_entityInsideSeen.end() && it->second == tick)
+                        continue;
+                    s_entityInsideSeen[key] = tick;
+
+                    BlockEntityNativeArgs args{};
+                    args.block = { blockId, isClientSide, level, x, y, z };
+                    args.entityPtr = thisPtr;
+                    DotNetHost::CallBlockEntityInsideTile(&args, sizeof(args));
+                }
+            }
+        }
+    }
+
+    void __fastcall Hooked_TileStepOn(void* thisPtr, void* level, int x, int y, int z, void* entitySharedPtr)
+    {
+        if (Original_TileStepOn)
+            Original_TileStepOn(thisPtr, level, x, y, z, entitySharedPtr);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        void* entityPtr = DecodeEntityPtrFromSharedArg(entitySharedPtr);
+        BlockEntityNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.entityPtr = entityPtr;
+        DotNetHost::CallBlockStepOn(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TileEntityInside(void* thisPtr, void* level, int x, int y, int z, void* entitySharedPtr)
+    {
+        if (Original_TileEntityInside)
+            Original_TileEntityInside(thisPtr, level, x, y, z, entitySharedPtr);
+
+        (void)thisPtr;
+        (void)level;
+        (void)x;
+        (void)y;
+        (void)z;
+        (void)entitySharedPtr;
+    }
+
+    void __fastcall Hooked_TileFallOn(void* thisPtr, void* level, int x, int y, int z, void* entitySharedPtr, float fallDistance)
+    {
+        if (Original_TileFallOn)
+            Original_TileFallOn(thisPtr, level, x, y, z, entitySharedPtr, fallDistance);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        void* entityPtr = DecodeEntityPtrFromSharedArg(entitySharedPtr);
+        BlockFallNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.entityPtr = entityPtr;
+        args.fallDistance = fallDistance;
+        DotNetHost::CallBlockFallOn(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TileOnRemoving(void* thisPtr, void* level, int x, int y, int z, int data)
+    {
+        if (Original_TileOnRemoving)
+            Original_TileOnRemoving(thisPtr, level, x, y, z, data);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        BlockRemovingNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.blockData = data;
+        DotNetHost::CallBlockRemoving(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TileOnRemove(void* thisPtr, void* level, int x, int y, int z, int id, int data)
+    {
+        if (Original_TileOnRemove)
+            Original_TileOnRemove(thisPtr, level, x, y, z, id, data);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        BlockRemoveNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.removedBlockId = id;
+        args.removedBlockData = data;
+        DotNetHost::CallBlockRemoved(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TileDestroy(void* thisPtr, void* level, int x, int y, int z, int data)
+    {
+        if (Original_TileDestroy)
+            Original_TileDestroy(thisPtr, level, x, y, z, data);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        BlockDestroyNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.blockData = data;
+        DotNetHost::CallBlockDestroyed(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TilePlayerDestroy(void* thisPtr, void* level, void* playerSharedPtr, int x, int y, int z, int data)
+    {
+        if (Original_TilePlayerDestroy)
+            Original_TilePlayerDestroy(thisPtr, level, playerSharedPtr, x, y, z, data);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+        BlockPlayerDestroyNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.playerPtr = playerPtr;
+        args.blockData = data;
+        DotNetHost::CallBlockPlayerDestroy(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TilePlayerWillDestroy(void* thisPtr, void* level, int x, int y, int z, int data, void* playerSharedPtr)
+    {
+        if (Original_TilePlayerWillDestroy)
+            Original_TilePlayerWillDestroy(thisPtr, level, x, y, z, data, playerSharedPtr);
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+        BlockPlayerWillDestroyNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.playerPtr = playerPtr;
+        args.blockData = data;
+        DotNetHost::CallBlockPlayerWillDestroy(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_TileSetPlacedBy(void* thisPtr, void* level, int x, int y, int z, void* livingEntitySharedPtr, void* itemInstanceSharedPtr)
+    {
+        if (Original_TileSetPlacedBy)
+            Original_TileSetPlacedBy(thisPtr, level, x, y, z, livingEntitySharedPtr, itemInstanceSharedPtr);
+
+        if (WasRecentlyPlaced(level, x, y, z))
+            return;
+
+        const int blockId = TryReadTileId(thisPtr);
+        if (!ManagedBlockRegistry::IsManaged(blockId))
+            return;
+
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        void* placerPtr = DecodeEntityPtrFromSharedArg(livingEntitySharedPtr);
+        void* itemInstancePtr = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
+        BlockPlacedByNativeArgs args{};
+        args.block = { blockId, isClientSide, level, x, y, z };
+        args.placerPtr = placerPtr;
+        args.itemInstancePtr = itemInstancePtr;
+        DotNetHost::CallBlockPlacedBy(&args, sizeof(args));
+
+        s_lastPlacedLevel = level;
+        s_lastPlacedX = x;
+        s_lastPlacedY = y;
+        s_lastPlacedZ = z;
+        s_lastPlacedTimeMs = GetTickCount64();
+    }
+
+    static bool TryGetPlacementContext(void* levelPtr, void*& outPlayerPtr, void*& outItemInstancePtr)
+    {
+        if (!s_lastUsePlayer || !s_lastUseLevel || s_lastUseLevel != levelPtr)
             return false;
 
         const ULONGLONG nowMs = GetTickCount64();
@@ -2054,7 +2775,23 @@ namespace GameHooks
             return false;
 
         outPlayerPtr = s_lastUsePlayer;
+        outItemInstancePtr = s_lastUseItemInstance;
         return true;
+    }
+
+    static bool TryGetPlacementPlayer(void* levelPtr, void*& outPlayerPtr)
+    {
+        void* unusedItem = nullptr;
+        return TryGetPlacementContext(levelPtr, outPlayerPtr, unusedItem);
+    }
+
+    static bool WasRecentlyPlaced(void* levelPtr, int x, int y, int z)
+    {
+        if (s_lastPlacedLevel != levelPtr || s_lastPlacedX != x || s_lastPlacedY != y || s_lastPlacedZ != z)
+            return false;
+
+        const ULONGLONG nowMs = GetTickCount64();
+        return nowMs >= s_lastPlacedTimeMs && (nowMs - s_lastPlacedTimeMs) <= 500;
     }
 
     static int ComputeFacingDataFromYaw(float yaw)
@@ -2070,6 +2807,10 @@ namespace GameHooks
     bool __fastcall Hooked_LevelSetTileAndData(void* thisPtr, int x, int y, int z, int tile, int data, int updateFlags)
     {
         const int oldBlockId = s_levelGetTile ? s_levelGetTile(thisPtr, x, y, z) : -1;
+        const int oldBlockData = Level_GetData && thisPtr ? Level_GetData(thisPtr, x, y, z) : 0;
+        int isClientSide = 0;
+        if (thisPtr && IsReadableRange(static_cast<char*>(thisPtr) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(thisPtr) + kLevelIsClientSideOffset) ? 1 : 0;
         int effectiveData = data;
         if (tile > 0)
         {
@@ -2112,6 +2853,15 @@ namespace GameHooks
             }
         }
 
+        const bool isChange = oldBlockId > 0 && (oldBlockId != tile || oldBlockData != effectiveData);
+        if (isChange && ManagedBlockRegistry::IsManaged(oldBlockId))
+        {
+            BlockRemovingNativeArgs args{};
+            args.block = { oldBlockId, isClientSide, thisPtr, x, y, z };
+            args.blockData = oldBlockData;
+            DotNetHost::CallBlockRemoving(&args, sizeof(args));
+        }
+
         const bool result = Original_LevelSetTileAndData
             ? Original_LevelSetTileAndData(thisPtr, x, y, z, tile, effectiveData, updateFlags)
             : false;
@@ -2119,8 +2869,39 @@ namespace GameHooks
         if (result && s_levelGetTile)
             WorldIdRemap::MarkChunkDirtyByBlockUpdate(x, z, oldBlockId, tile);
 
+        if (result && isChange && ManagedBlockRegistry::IsManaged(oldBlockId))
+        {
+            BlockRemoveNativeArgs args{};
+            args.block = { oldBlockId, isClientSide, thisPtr, x, y, z };
+            args.removedBlockId = oldBlockId;
+            args.removedBlockData = oldBlockData;
+            DotNetHost::CallBlockRemoved(&args, sizeof(args));
+        }
+
         if (result && tile > 0)
+        {
             DispatchManagedBlockById(tile, thisPtr, x, y, z, 0, 0);
+
+            if (ManagedBlockRegistry::IsManaged(tile) && !WasRecentlyPlaced(thisPtr, x, y, z))
+            {
+                void* placerPtr = nullptr;
+                void* itemInstancePtr = nullptr;
+                if (TryGetPlacementContext(thisPtr, placerPtr, itemInstancePtr))
+                {
+                    BlockPlacedByNativeArgs args{};
+                    args.block = { tile, isClientSide, thisPtr, x, y, z };
+                    args.placerPtr = placerPtr;
+                    args.itemInstancePtr = itemInstancePtr;
+                    DotNetHost::CallBlockPlacedBy(&args, sizeof(args));
+
+                    s_lastPlacedLevel = thisPtr;
+                    s_lastPlacedX = x;
+                    s_lastPlacedY = y;
+                    s_lastPlacedZ = z;
+                    s_lastPlacedTimeMs = GetTickCount64();
+                }
+            }
+        }
 
         return result;
     }
@@ -3031,8 +3812,39 @@ namespace GameHooks
             {
                 s_lastUsePlayer = playerPtr;
                 s_lastUseLevel = level;
+                s_lastUseItemInstance = thisPtr;
                 s_lastUseTimeMs = GetTickCount64();
             }
+        }
+
+        int itemId = 0;
+        if (!bTestUseOnOnly && TryReadItemId(thisPtr, itemId))
+        {
+            int isClientSide = 0;
+            if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            {
+                isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+            }
+
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            UseOnItemNativeArgs args{};
+            args.itemId = itemId;
+            args.isClientSide = isClientSide;
+            args.itemInstancePtr = thisPtr;
+            args.playerPtr = playerPtr;
+            args.playerSharedPtr = playerSharedPtr;
+            args.levelPtr = level;
+            args.x = x;
+            args.y = y;
+            args.z = z;
+            args.face = face;
+            args.clickX = clickX;
+            args.clickY = clickY;
+            args.clickZ = clickZ;
+
+            int action = DotNetHost::CallItemUseOn(&args, sizeof(args));
+            if (action == 2)
+                return true;
         }
 
         if (Original_ItemInstanceUseOn)
@@ -3056,6 +3868,105 @@ namespace GameHooks
         if (Original_ItemInstanceLoad)
             Original_ItemInstanceLoad(thisPtr, compoundTagPtr);
         WorldIdRemap::RemapItemInstanceFromTag(thisPtr, compoundTagPtr);
+    }
+
+    void __fastcall Hooked_ItemInstanceInventoryTick(void* thisPtr, void* level, void* ownerSharedPtr, int slot, bool selected)
+    {
+        if (Original_ItemInstanceInventoryTick)
+            Original_ItemInstanceInventoryTick(thisPtr, level, ownerSharedPtr, slot, selected);
+
+        int itemId = 0;
+        if (!TryReadItemId(thisPtr, itemId))
+            return;
+
+        void* ownerPtr = DecodeEntityPtrFromSharedArg(ownerSharedPtr);
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        ItemInventoryTickNativeArgs args{};
+        args.itemId = itemId;
+        args.itemInstancePtr = thisPtr;
+        args.levelPtr = level;
+        args.ownerEntityPtr = ownerPtr;
+        args.slot = slot;
+        args.isSelected = selected ? 1 : 0;
+        args.isClientSide = isClientSide;
+        DotNetHost::CallItemInventoryTick(&args, sizeof(args));
+    }
+
+    void __fastcall Hooked_ItemInstanceOnCraftedBy(void* thisPtr, void* level, void* playerSharedPtr, int amount)
+    {
+        if (Original_ItemInstanceOnCraftedBy)
+            Original_ItemInstanceOnCraftedBy(thisPtr, level, playerSharedPtr, amount);
+
+        int itemId = 0;
+        if (!TryReadItemId(thisPtr, itemId))
+            return;
+
+        void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+        int isClientSide = 0;
+        if (level && IsReadableRange(static_cast<char*>(level) + kLevelIsClientSideOffset, sizeof(bool)))
+            isClientSide = *reinterpret_cast<bool*>(static_cast<char*>(level) + kLevelIsClientSideOffset) ? 1 : 0;
+
+        ItemCraftedByNativeArgs args{};
+        args.itemId = itemId;
+        args.itemInstancePtr = thisPtr;
+        args.levelPtr = level;
+        args.playerPtr = playerPtr;
+        args.playerSharedPtr = playerSharedPtr;
+        args.amount = amount;
+        args.isClientSide = isClientSide;
+        DotNetHost::CallItemCraftedBy(&args, sizeof(args));
+    }
+
+    bool __fastcall Hooked_ItemInstanceInteractEnemy(void* thisPtr, void* playerSharedPtr, void* targetSharedPtr)
+    {
+        int itemId = 0;
+        if (TryReadItemId(thisPtr, itemId))
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            void* targetPtr = DecodeEntityPtrFromSharedArg(targetSharedPtr);
+
+            ItemEntityInteractionNativeArgs args{};
+            args.itemId = itemId;
+            args.itemInstancePtr = thisPtr;
+            args.playerPtr = playerPtr;
+            args.playerSharedPtr = playerSharedPtr;
+            args.targetEntityPtr = targetPtr;
+
+            int action = DotNetHost::CallItemInteractEntity(&args, sizeof(args));
+            if (action == 2)
+                return true;
+        }
+
+        if (Original_ItemInstanceInteractEnemy)
+            return Original_ItemInstanceInteractEnemy(thisPtr, playerSharedPtr, targetSharedPtr);
+        return false;
+    }
+
+    void __fastcall Hooked_ItemInstanceHurtEnemy(void* thisPtr, void* targetSharedPtr, void* playerSharedPtr)
+    {
+        int itemId = 0;
+        if (TryReadItemId(thisPtr, itemId))
+        {
+            void* playerPtr = DecodePlayerPtrFromSharedArg(playerSharedPtr);
+            void* targetPtr = DecodeEntityPtrFromSharedArg(targetSharedPtr);
+
+            ItemEntityInteractionNativeArgs args{};
+            args.itemId = itemId;
+            args.itemInstancePtr = thisPtr;
+            args.playerPtr = playerPtr;
+            args.playerSharedPtr = playerSharedPtr;
+            args.targetEntityPtr = targetPtr;
+
+            int action = DotNetHost::CallItemHurtEntity(&args, sizeof(args));
+            if (action == 2)
+                return;
+        }
+
+        if (Original_ItemInstanceHurtEnemy)
+            Original_ItemInstanceHurtEnemy(thisPtr, targetSharedPtr, playerSharedPtr);
     }
 
     bool __fastcall Hooked_ItemMineBlock(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr)
@@ -3338,6 +4249,7 @@ namespace GameHooks
             {
                 s_lastUsePlayer = playerPtr;
                 s_lastUseLevel = level;
+                s_lastUseItemInstance = itemInstancePtr;
                 s_lastUseTimeMs = nowMs;
             }
         }
@@ -3375,6 +4287,7 @@ namespace GameHooks
             {
                 s_lastUsePlayer = playerPtr;
                 s_lastUseLevel = level;
+                s_lastUseItemInstance = itemInstancePtr;
                 s_lastUseTimeMs = GetTickCount64();
             }
         }
@@ -3404,6 +4317,7 @@ namespace GameHooks
             {
                 s_lastUsePlayer = playerPtr;
                 s_lastUseLevel = level;
+                s_lastUseItemInstance = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
                 s_lastUseTimeMs = GetTickCount64();
             }
         }
@@ -3422,6 +4336,7 @@ namespace GameHooks
             {
                 s_lastUsePlayer = playerPtr;
                 s_lastUseLevel = level;
+                s_lastUseItemInstance = DecodeItemInstancePtrFromSharedArg(itemInstanceSharedPtr);
                 s_lastUseTimeMs = GetTickCount64();
             }
         }
@@ -3571,6 +4486,7 @@ namespace GameHooks
 
     void __fastcall Hooked_MinecraftTick(void* thisPtr, bool bFirst, bool bUpdateTextures)
     {
+        s_tickCounter.fetch_add(1, std::memory_order_relaxed);
         ModAtlas::PollAsyncBuild();
         CullSpawnedEntitiesBelowWorld();
         Original_MinecraftTick(thisPtr, bFirst, bUpdateTextures);

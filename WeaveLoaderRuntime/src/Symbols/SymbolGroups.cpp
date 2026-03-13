@@ -67,6 +67,10 @@ namespace
     static const char* SYM_ITEMINSTANCE_SAVE = "?save@ItemInstance@@QEAAPEAVCompoundTag@@PEAV2@@Z";
     static const char* SYM_ITEMINSTANCE_LOAD = "?load@ItemInstance@@QEAAXPEAVCompoundTag@@@Z";
     static const char* SYM_ITEMINSTANCE_HURTANDBREAK = "?hurtAndBreak@ItemInstance@@QEAAXHV?$shared_ptr@VLivingEntity@@@std@@@Z";
+    static const char* SYM_ITEMINSTANCE_INVENTORYTICK = "?inventoryTick@ItemInstance@@QEAAXPEAVLevel@@V?$shared_ptr@VEntity@@@std@@H_N@Z";
+    static const char* SYM_ITEMINSTANCE_ONCRAFTEDBY = "?onCraftedBy@ItemInstance@@QEAAXPEAVLevel@@V?$shared_ptr@VPlayer@@@std@@H@Z";
+    static const char* SYM_ITEMINSTANCE_INTERACTENEMY = "?interactEnemy@ItemInstance@@QEAA_NV?$shared_ptr@VPlayer@@@std@@V?$shared_ptr@VLivingEntity@@@3@@Z";
+    static const char* SYM_ITEMINSTANCE_HURTENEMY = "?hurtEnemy@ItemInstance@@QEAAXV?$shared_ptr@VLivingEntity@@@std@@V?$shared_ptr@VPlayer@@@3@@Z";
     static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
     static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
     static const char* SYM_PICKAXEITEM_GETDESTROYSPEED = "?getDestroySpeed@PickaxeItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
@@ -81,6 +85,16 @@ namespace
     static const char* SYM_TILE_ONPLACE = "?onPlace@Tile@@UEAAXPEAVLevel@@HHH@Z";
     static const char* SYM_TILE_NEIGHBORCHANGED = "?neighborChanged@Tile@@UEAAXPEAVLevel@@HHHH@Z";
     static const char* SYM_TILE_TICK = "?tick@Tile@@UEAAXPEAVLevel@@HHHPEAVRandom@@@Z";
+    static const char* SYM_TILE_USE = "?use@Tile@@UEAA_NPEAVLevel@@HHHV?$shared_ptr@VPlayer@@@std@@HMMM_N@Z";
+    static const char* SYM_TILE_STEPON = "?stepOn@Tile@@UEAAXPEAVLevel@@HHHV?$shared_ptr@VEntity@@@std@@@Z";
+    static const char* SYM_TILE_ENTITYINSIDE = "?entityInside@Tile@@UEAAXPEAVLevel@@HHHV?$shared_ptr@VEntity@@@std@@@Z";
+    static const char* SYM_TILE_FALLON = "?fallOn@Tile@@UEAAXPEAVLevel@@HHHV?$shared_ptr@VEntity@@@std@@M@Z";
+    static const char* SYM_TILE_ONREMOVING = "?onRemoving@Tile@@UEAAXPEAVLevel@@HHHH@Z";
+    static const char* SYM_TILE_ONREMOVE = "?onRemove@Tile@@UEAAXPEAVLevel@@HHHHH@Z";
+    static const char* SYM_TILE_DESTROY = "?destroy@Tile@@UEAAXPEAVLevel@@HHHH@Z";
+    static const char* SYM_TILE_PLAYERDESTROY = "?playerDestroy@Tile@@UEAAXPEAVLevel@@V?$shared_ptr@VPlayer@@@std@@HHHH@Z";
+    static const char* SYM_TILE_PLAYERWILLDESTROY = "?playerWillDestroy@Tile@@UEAAXPEAVLevel@@HHHHV?$shared_ptr@VPlayer@@@std@@@Z";
+    static const char* SYM_TILE_SETPLACEDBY = "?setPlacedBy@Tile@@UEAAXPEAVLevel@@HHHV?$shared_ptr@VLivingEntity@@@std@@V?$shared_ptr@VItemInstance@@@4@@Z";
     static const char* SYM_TILE_GETRESOURCE = "?getResource@Tile@@UEAAHHPEAVRandom@@H@Z";
     static const char* SYM_TILE_GETPLACEDONFACEDATAVALUE = "?getPlacedOnFaceDataValue@Tile@@UEAAHPEAVLevel@@HHHHMMMH@Z";
     static const char* SYM_TILE_CLONETILEID = "?cloneTileId@Tile@@UEAAHPEAVLevel@@HHH@Z";
@@ -138,7 +152,9 @@ namespace
     static const char* SYM_LEVEL_ADDENTITY = "?addEntity@Level@@UEAA_NV?$shared_ptr@VEntity@@@std@@@Z";
     static const char* SYM_ENTITYIO_NEWBYID = "?newById@EntityIO@@SA?AV?$shared_ptr@VEntity@@@std@@HPEAVLevel@@@Z";
     static const char* SYM_ENTITY_MOVETO = "?moveTo@Entity@@QEAAXNNNMM@Z";
+    static const char* SYM_ENTITY_CHECKINSIDETILES = "?checkInsideTiles@Entity@@MEAAXXZ";
     static const char* SYM_ENTITY_SETPOS = "?setPos@Entity@@QEAAXNNN@Z";
+    static const char* SYM_ENTITY_PLAYSTEPSOUND = "?playStepSound@Entity@@MEAAXHHHH@Z";
     static const char* SYM_LIVINGENTITY_GETLOOKANGLE = "?getLookAngle@LivingEntity@@UEAAPEAVVec3@@XZ";
     static const char* SYM_ENTITY_GETLOOKANGLE = "?getLookAngle@Entity@@UEAAPEAVVec3@@XZ";
     static const char* SYM_LIVINGENTITY_GETVIEWVECTOR = "?getViewVector@LivingEntity@@UEAAPEAVVec3@@M@Z";
@@ -311,6 +327,10 @@ bool ItemSymbols::Resolve(SymbolResolver& resolver)
     pItemInstanceSave = resolver.Resolve(SYM_ITEMINSTANCE_SAVE);
     pItemInstanceLoad = resolver.Resolve(SYM_ITEMINSTANCE_LOAD);
     pItemInstanceHurtAndBreak = resolver.Resolve(SYM_ITEMINSTANCE_HURTANDBREAK);
+    pItemInstanceInventoryTick = resolver.Resolve(SYM_ITEMINSTANCE_INVENTORYTICK);
+    pItemInstanceOnCraftedBy = resolver.Resolve(SYM_ITEMINSTANCE_ONCRAFTEDBY);
+    pItemInstanceInteractEnemy = resolver.Resolve(SYM_ITEMINSTANCE_INTERACTENEMY);
+    pItemInstanceHurtEnemy = resolver.Resolve(SYM_ITEMINSTANCE_HURTENEMY);
     pItemMineBlock = resolver.Resolve(SYM_ITEM_MINEBLOCK);
     pDiggerItemMineBlock = resolver.Resolve(SYM_DIGGERITEM_MINEBLOCK);
     pPickaxeItemGetDestroySpeed = resolver.Resolve(SYM_PICKAXEITEM_GETDESTROYSPEED);
@@ -334,6 +354,10 @@ void ItemSymbols::Log() const
     LogSym("ItemInstance::save", pItemInstanceSave);
     LogSym("ItemInstance::load", pItemInstanceLoad);
     LogSym("ItemInstance::hurtAndBreak", pItemInstanceHurtAndBreak);
+    LogSym("ItemInstance::inventoryTick", pItemInstanceInventoryTick);
+    LogSym("ItemInstance::onCraftedBy", pItemInstanceOnCraftedBy);
+    LogSym("ItemInstance::interactEnemy", pItemInstanceInteractEnemy);
+    LogSym("ItemInstance::hurtEnemy", pItemInstanceHurtEnemy);
     LogSym("Item::mineBlock", pItemMineBlock);
     LogSym("DiggerItem::mineBlock", pDiggerItemMineBlock);
     LogSym("PickaxeItem::getDestroySpeed", pPickaxeItemGetDestroySpeed);
@@ -351,6 +375,16 @@ bool TileSymbols::Resolve(SymbolResolver& resolver)
     pTileOnPlace = resolver.Resolve(SYM_TILE_ONPLACE);
     pTileNeighborChanged = resolver.Resolve(SYM_TILE_NEIGHBORCHANGED);
     pTileTick = resolver.Resolve(SYM_TILE_TICK);
+    pTileUse = resolver.Resolve(SYM_TILE_USE);
+    pTileStepOn = resolver.Resolve(SYM_TILE_STEPON);
+    pTileEntityInside = resolver.Resolve(SYM_TILE_ENTITYINSIDE);
+    pTileFallOn = resolver.Resolve(SYM_TILE_FALLON);
+    pTileOnRemoving = resolver.Resolve(SYM_TILE_ONREMOVING);
+    pTileOnRemove = resolver.Resolve(SYM_TILE_ONREMOVE);
+    pTileDestroy = resolver.Resolve(SYM_TILE_DESTROY);
+    pTilePlayerDestroy = resolver.Resolve(SYM_TILE_PLAYERDESTROY);
+    pTilePlayerWillDestroy = resolver.Resolve(SYM_TILE_PLAYERWILLDESTROY);
+    pTileSetPlacedBy = resolver.Resolve(SYM_TILE_SETPLACEDBY);
     pTileGetResource = resolver.Resolve(SYM_TILE_GETRESOURCE);
     pTileGetPlacedOnFaceDataValue = resolver.Resolve(SYM_TILE_GETPLACEDONFACEDATAVALUE);
     pTileCloneTileId = resolver.Resolve(SYM_TILE_CLONETILEID);
@@ -391,6 +425,26 @@ bool TileSymbols::Resolve(SymbolResolver& resolver)
         pTileNeighborChanged = resolver.ResolveExact("Tile::neighborChanged");
     if (resolver.IsStub(pTileTick))
         pTileTick = resolver.ResolveExact("Tile::tick");
+    if (resolver.IsStub(pTileUse))
+        pTileUse = resolver.ResolveExact("Tile::use");
+    if (resolver.IsStub(pTileStepOn))
+        pTileStepOn = resolver.ResolveExact("Tile::stepOn");
+    if (resolver.IsStub(pTileEntityInside))
+        pTileEntityInside = resolver.ResolveExact("Tile::entityInside");
+    if (resolver.IsStub(pTileFallOn))
+        pTileFallOn = resolver.ResolveExact("Tile::fallOn");
+    if (resolver.IsStub(pTileOnRemoving))
+        pTileOnRemoving = resolver.ResolveExact("Tile::onRemoving");
+    if (resolver.IsStub(pTileOnRemove))
+        pTileOnRemove = resolver.ResolveExact("Tile::onRemove");
+    if (resolver.IsStub(pTileDestroy))
+        pTileDestroy = resolver.ResolveExact("Tile::destroy");
+    if (resolver.IsStub(pTilePlayerDestroy))
+        pTilePlayerDestroy = resolver.ResolveExact("Tile::playerDestroy");
+    if (resolver.IsStub(pTilePlayerWillDestroy))
+        pTilePlayerWillDestroy = resolver.ResolveExact("Tile::playerWillDestroy");
+    if (resolver.IsStub(pTileSetPlacedBy))
+        pTileSetPlacedBy = resolver.ResolveExact("Tile::setPlacedBy");
     if (resolver.IsStub(pWoodSlabRegisterIcons))
         pWoodSlabRegisterIcons = resolver.ResolveExact("WoodSlabTile::registerIcons");
     if (resolver.IsStub(pTileClip))
@@ -403,6 +457,16 @@ void TileSymbols::Log() const
     LogSym("Tile::onPlace", pTileOnPlace);
     LogSym("Tile::neighborChanged", pTileNeighborChanged);
     LogSym("Tile::tick", pTileTick);
+    LogSym("Tile::use", pTileUse);
+    LogSym("Tile::stepOn", pTileStepOn);
+    LogSym("Tile::entityInside", pTileEntityInside);
+    LogSym("Tile::fallOn", pTileFallOn);
+    LogSym("Tile::onRemoving", pTileOnRemoving);
+    LogSym("Tile::onRemove", pTileOnRemove);
+    LogSym("Tile::destroy", pTileDestroy);
+    LogSym("Tile::playerDestroy", pTilePlayerDestroy);
+    LogSym("Tile::playerWillDestroy", pTilePlayerWillDestroy);
+    LogSym("Tile::setPlacedBy", pTileSetPlacedBy);
     LogSym("Tile::getResource", pTileGetResource);
     LogSym("Tile::getPlacedOnFaceDataValue", pTileGetPlacedOnFaceDataValue);
     LogSym("Tile::cloneTileId", pTileCloneTileId);
@@ -501,8 +565,10 @@ bool EntitySymbols::Resolve(SymbolResolver& resolver)
     pServerPlayerGameModeUseItemOn = resolver.Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEMON);
     pMultiPlayerGameModeUseItemOn = resolver.Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEMON);
     pLevelAddEntity = resolver.Resolve(SYM_LEVEL_ADDENTITY);
+    pEntityPlayStepSound = resolver.Resolve(SYM_ENTITY_PLAYSTEPSOUND);
     pEntityIONewById = resolver.Resolve(SYM_ENTITYIO_NEWBYID);
     pEntityMoveTo = resolver.Resolve(SYM_ENTITY_MOVETO);
+    pEntityCheckInsideTiles = resolver.Resolve(SYM_ENTITY_CHECKINSIDETILES);
     pEntitySetPos = resolver.Resolve(SYM_ENTITY_SETPOS);
     pEntityGetLookAngle = resolver.Resolve(SYM_LIVINGENTITY_GETLOOKANGLE);
     pLivingEntityGetPos = resolver.Resolve(SYM_LIVINGENTITY_GETPOS);
@@ -524,8 +590,10 @@ void EntitySymbols::Log() const
     LogSym("ServerPlayerGameMode::useItemOn", pServerPlayerGameModeUseItemOn);
     LogSym("MultiPlayerGameMode::useItemOn", pMultiPlayerGameModeUseItemOn);
     LogSym("Level::addEntity", pLevelAddEntity);
+    LogSym("Entity::playStepSound", pEntityPlayStepSound);
     LogSym("EntityIO::newById", pEntityIONewById);
     LogSym("Entity::moveTo", pEntityMoveTo);
+    LogSym("Entity::checkInsideTiles", pEntityCheckInsideTiles);
     LogSym("Entity::setPos", pEntitySetPos);
     LogSym("LivingEntity/Entity::getLookAngle", pEntityGetLookAngle);
     LogSym("LivingEntity::getPos", pLivingEntityGetPos);

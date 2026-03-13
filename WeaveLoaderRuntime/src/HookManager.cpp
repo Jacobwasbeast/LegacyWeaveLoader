@@ -184,6 +184,91 @@ bool HookManager::Install(const SymbolResolver& symbols)
         }
     }
 
+    if (symbols.Item.pItemInstanceInventoryTick)
+    {
+        if (MH_CreateHook(symbols.Item.pItemInstanceInventoryTick,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceInventoryTick),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceInventoryTick)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::inventoryTick");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::inventoryTick (managed item callbacks)");
+        }
+    }
+
+    if (symbols.Item.pItemInstanceOnCraftedBy)
+    {
+        if (MH_CreateHook(symbols.Item.pItemInstanceOnCraftedBy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceOnCraftedBy),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceOnCraftedBy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::onCraftedBy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::onCraftedBy (managed item callbacks)");
+        }
+    }
+
+    if (symbols.Item.pItemInstanceInteractEnemy)
+    {
+        if (MH_CreateHook(symbols.Item.pItemInstanceInteractEnemy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceInteractEnemy),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceInteractEnemy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::interactEnemy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::interactEnemy (managed item callbacks)");
+        }
+    }
+
+    if (symbols.Item.pItemInstanceHurtEnemy)
+    {
+        if (MH_CreateHook(symbols.Item.pItemInstanceHurtEnemy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_ItemInstanceHurtEnemy),
+                          reinterpret_cast<void**>(&GameHooks::Original_ItemInstanceHurtEnemy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook ItemInstance::hurtEnemy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked ItemInstance::hurtEnemy (managed item callbacks)");
+        }
+    }
+
+    if (symbols.Entity.pEntityPlayStepSound)
+    {
+        if (MH_CreateHook(symbols.Entity.pEntityPlayStepSound,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_EntityPlayStepSound),
+                          reinterpret_cast<void**>(&GameHooks::Original_EntityPlayStepSound)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Entity::playStepSound");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Entity::playStepSound (step-on callbacks)");
+        }
+    }
+
+    if (symbols.Entity.pEntityCheckInsideTiles)
+    {
+        if (MH_CreateHook(symbols.Entity.pEntityCheckInsideTiles,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_EntityCheckInsideTiles),
+                          reinterpret_cast<void**>(&GameHooks::Original_EntityCheckInsideTiles)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Entity::checkInsideTiles");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Entity::checkInsideTiles (entity-inside callbacks)");
+        }
+    }
+
+
     if (symbols.Item.pItemInstanceGetIcon)
     {
         if (MH_CreateHook(symbols.Item.pItemInstanceGetIcon,
@@ -475,6 +560,162 @@ bool HookManager::Install(const SymbolResolver& symbols)
         else
         {
             LogUtil::Log("[WeaveLoader] Hooked Level::updateNeighborsAt (managed block callbacks)");
+        }
+    }
+
+    if (symbols.Tile.pTileUse)
+    {
+        if (MH_CreateHook(symbols.Tile.pTileUse,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TileUse),
+                          reinterpret_cast<void**>(&GameHooks::Original_TileUse)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::use");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Tile::use (managed block callbacks)");
+        }
+    }
+
+
+    void* sharedActionTarget = symbols.Tile.pTileStepOn
+        ? symbols.Tile.pTileStepOn
+        : symbols.Tile.pTileFallOn;
+    int sharedActionCount = 0;
+    if (sharedActionTarget)
+    {
+        if (symbols.Tile.pTileStepOn == sharedActionTarget) sharedActionCount++;
+        if (symbols.Tile.pTileFallOn == sharedActionTarget) sharedActionCount++;
+    }
+
+    const bool useSharedActionHook = sharedActionTarget && sharedActionCount >= 2;
+    if (useSharedActionHook)
+    {
+        if (MH_CreateHook(sharedActionTarget,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TileSharedAction),
+                          reinterpret_cast<void**>(&GameHooks::Original_TileSharedAction)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook shared Tile action stub");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked shared Tile action stub (stepOn/fallOn)");
+        }
+    }
+    else
+    {
+        if (symbols.Tile.pTileStepOn)
+        {
+            if (MH_CreateHook(symbols.Tile.pTileStepOn,
+                              reinterpret_cast<void*>(&GameHooks::Hooked_TileStepOn),
+                              reinterpret_cast<void**>(&GameHooks::Original_TileStepOn)) != MH_OK)
+            {
+                LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::stepOn");
+            }
+            else
+            {
+                LogUtil::Log("[WeaveLoader] Hooked Tile::stepOn (managed block callbacks)");
+            }
+        }
+
+        if (symbols.Tile.pTileFallOn)
+        {
+            if (MH_CreateHook(symbols.Tile.pTileFallOn,
+                              reinterpret_cast<void*>(&GameHooks::Hooked_TileFallOn),
+                              reinterpret_cast<void**>(&GameHooks::Original_TileFallOn)) != MH_OK)
+            {
+                LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::fallOn");
+            }
+            else
+            {
+                LogUtil::Log("[WeaveLoader] Hooked Tile::fallOn (managed block callbacks)");
+            }
+        }
+    }
+
+    void* sharedLifecycleTarget = symbols.Tile.pTileDestroy
+        ? symbols.Tile.pTileDestroy
+        : symbols.Tile.pTileTick;
+    int sharedLifecycleCount = 0;
+    if (sharedLifecycleTarget)
+    {
+        if (symbols.Tile.pTileDestroy == sharedLifecycleTarget) sharedLifecycleCount++;
+        if (symbols.Tile.pTileOnRemoving == sharedLifecycleTarget) sharedLifecycleCount++;
+        if (symbols.Tile.pTileOnRemove == sharedLifecycleTarget) sharedLifecycleCount++;
+        if (symbols.Tile.pTileTick == sharedLifecycleTarget) sharedLifecycleCount++;
+    }
+
+    const bool useSharedLifecycleHook = sharedLifecycleTarget && sharedLifecycleCount >= 2;
+    if (useSharedLifecycleHook)
+    {
+        if (MH_CreateHook(sharedLifecycleTarget,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TileSharedLifecycle),
+                          reinterpret_cast<void**>(&GameHooks::Original_TileSharedLifecycle)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook shared Tile lifecycle stub");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked shared Tile lifecycle stub (destroy)");
+        }
+    }
+    else
+    {
+        if (symbols.Tile.pTileDestroy)
+        {
+            if (MH_CreateHook(symbols.Tile.pTileDestroy,
+                              reinterpret_cast<void*>(&GameHooks::Hooked_TileDestroy),
+                              reinterpret_cast<void**>(&GameHooks::Original_TileDestroy)) != MH_OK)
+            {
+                LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::destroy");
+            }
+            else
+            {
+                LogUtil::Log("[WeaveLoader] Hooked Tile::destroy (managed block callbacks)");
+            }
+        }
+
+    }
+
+    if (symbols.Tile.pTilePlayerDestroy)
+    {
+        if (MH_CreateHook(symbols.Tile.pTilePlayerDestroy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TilePlayerDestroy),
+                          reinterpret_cast<void**>(&GameHooks::Original_TilePlayerDestroy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::playerDestroy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Tile::playerDestroy (managed block callbacks)");
+        }
+    }
+
+    if (symbols.Tile.pTilePlayerWillDestroy)
+    {
+        if (MH_CreateHook(symbols.Tile.pTilePlayerWillDestroy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TilePlayerWillDestroy),
+                          reinterpret_cast<void**>(&GameHooks::Original_TilePlayerWillDestroy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::playerWillDestroy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Tile::playerWillDestroy (managed block callbacks)");
+        }
+    }
+
+    if (symbols.Tile.pTileSetPlacedBy)
+    {
+        if (MH_CreateHook(symbols.Tile.pTileSetPlacedBy,
+                          reinterpret_cast<void*>(&GameHooks::Hooked_TileSetPlacedBy),
+                          reinterpret_cast<void**>(&GameHooks::Original_TileSetPlacedBy)) != MH_OK)
+        {
+            LogUtil::Log("[WeaveLoader] Warning: Failed to hook Tile::setPlacedBy");
+        }
+        else
+        {
+            LogUtil::Log("[WeaveLoader] Hooked Tile::setPlacedBy (managed block callbacks)");
         }
     }
 
