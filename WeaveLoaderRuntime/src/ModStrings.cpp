@@ -162,19 +162,19 @@ namespace ModStrings
         return nullptr;
     }
 
-    void InjectAllIntoGameTable()
+    bool InjectAllIntoGameTable()
     {
         if (!s_pStringTableField)
         {
             LogUtil::Log("[WeaveLoader] ModStrings: no string table ref - cannot inject");
-            return;
+            return false;
         }
 
         void* stringTable = *s_pStringTableField;
         if (!stringTable)
         {
             LogUtil::Log("[WeaveLoader] ModStrings: m_stringTable pointer is NULL");
-            return;
+            return false;
         }
 
         LogUtil::Log("[WeaveLoader] ModStrings: StringTable object at %p", stringTable);
@@ -183,14 +183,14 @@ namespace ModStrings
         if (!vec)
         {
             LogUtil::Log("[WeaveLoader] ModStrings: FAILED to locate m_stringsVec in StringTable");
-            return;
+            return false;
         }
 
         std::lock_guard<std::mutex> lock(s_mutex);
         if (s_strings.empty())
         {
             LogUtil::Log("[WeaveLoader] ModStrings: no mod strings to inject");
-            return;
+            return false;
         }
 
         // Find the highest ID we need
@@ -213,5 +213,6 @@ namespace ModStrings
         }
 
         LogUtil::Log("[WeaveLoader] ModStrings: injected %d mod strings into game string table", count);
+        return true;
     }
 }

@@ -85,6 +85,9 @@ struct ItemSymbols
     void* pItemInstanceOnCraftedBy = nullptr;
     void* pItemInstanceInteractEnemy = nullptr;
     void* pItemInstanceHurtEnemy = nullptr;
+    void* pItemInstanceCtor = nullptr;
+    void* pItemInstanceSharedPtrCtor = nullptr;
+    void* pItemInstanceSetAuxValue = nullptr;
     void* pItemMineBlock = nullptr;
     void* pDiggerItemMineBlock = nullptr;
     void* pPickaxeItemGetDestroySpeed = nullptr;
@@ -95,6 +98,13 @@ struct ItemSymbols
     void* pItemRendererRenderGuiItem = nullptr;
     void* pItemInHandRendererRender = nullptr;
     void* pItemInHandRendererRenderItem = nullptr;
+    void* pItemInstanceSharedPtrDtor = nullptr;
+    void* pEntitySharedPtrCtor = nullptr;
+    void* pEntitySharedPtrDtor = nullptr;
+    void* pItemEntitySharedPtrDtor = nullptr;
+    void* pItemEntityCtorWithItem = nullptr;
+    void* pItemEntitySetItem = nullptr;
+    void* pItemEntityMakeShared = nullptr;
 
     bool Resolve(SymbolResolver& resolver);
     void Log() const;
@@ -197,6 +207,31 @@ struct EntitySymbols
     void* pLivingEntityGetViewVector = nullptr;
     void* pLivingEntityPick = nullptr;
     void* pEntityLerpMotion = nullptr;
+    void* pEntitySpawnAtLocation = nullptr;
+    void* pEntitySpawnAtLocationInt = nullptr;
+    void* pEntityGetEncodeId = nullptr;
+    void* pEntityGetEncodeIdById = nullptr;
+    void* pEntityGetNetworkName = nullptr;
+    void* pLivingEntityTickDeath = nullptr;
+    void* pLivingEntityDropDeathLoot = nullptr;
+    void* pMobDropDeathLoot = nullptr;
+    void* pChickenDropDeathLoot = nullptr;
+    void* pCowDropDeathLoot = nullptr;
+    void* pPigDropDeathLoot = nullptr;
+    void* pSheepDropDeathLoot = nullptr;
+    void* pSquidDropDeathLoot = nullptr;
+    void* pOcelotDropDeathLoot = nullptr;
+    void* pSnowManDropDeathLoot = nullptr;
+    void* pVillagerGolemDropDeathLoot = nullptr;
+    void* pPigZombieDropDeathLoot = nullptr;
+    void* pSpiderDropDeathLoot = nullptr;
+    void* pSkeletonDropDeathLoot = nullptr;
+    void* pWitchDropDeathLoot = nullptr;
+    void* pBlazeDropDeathLoot = nullptr;
+    void* pEnderManDropDeathLoot = nullptr;
+    void* pGhastDropDeathLoot = nullptr;
+    void* pLavaSlimeDropDeathLoot = nullptr;
+    void* pWitherBossDropDeathLoot = nullptr;
 
     bool Resolve(SymbolResolver& resolver);
     void Log() const;

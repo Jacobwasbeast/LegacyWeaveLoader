@@ -2,9 +2,12 @@
 #include <Windows.h>
 #include <cstdint>
 #include <string>
+#include <memory>
 
 /// Function pointer typedefs matching the game's actual function signatures.
 /// x64 MSVC uses __fastcall-like convention (this in rcx, args in rdx/r8/r9).
+
+class Entity;
 
 typedef void (*RunStaticCtors_fn)();
 typedef void (__fastcall *MinecraftTick_fn)(void* thisPtr, bool bFirst, bool bUpdateTextures);
@@ -36,6 +39,22 @@ typedef void (__fastcall *ItemInstanceInventoryTick_fn)(void* thisPtr, void* lev
 typedef void (__fastcall *ItemInstanceOnCraftedBy_fn)(void* thisPtr, void* level, void* playerSharedPtr, int amount);
 typedef bool (__fastcall *ItemInstanceInteractEnemy_fn)(void* thisPtr, void* playerSharedPtr, void* targetSharedPtr);
 typedef void (__fastcall *ItemInstanceHurtEnemy_fn)(void* thisPtr, void* targetSharedPtr, void* playerSharedPtr);
+typedef void (__fastcall *ItemInstanceSetAuxValue_fn)(void* thisPtr, int value);
+typedef void (__fastcall *ItemEntitySetItem_fn)(void* thisPtr, void* itemSharedPtr);
+typedef void (__fastcall *ItemEntityCtorWithItem_fn)(void* thisPtr, void* levelPtr, double x, double y, double z, void* itemSharedPtr);
+struct SharedPtrBlob
+{
+    void* ptr;
+    void* ref;
+};
+
+typedef void* (__cdecl *OperatorNew_fn)(size_t size);
+typedef void (__fastcall *ItemInstanceCtor_fn)(void* thisPtr, int itemId, int count, int aux);
+typedef void (__fastcall *SharedPtrItemInstanceCtor_fn)(void* thisPtr, void* rawPtr);
+typedef void (__fastcall *SharedPtrItemInstanceDtor_fn)(void* thisPtr);
+typedef void (__fastcall *SharedPtrItemEntityDtor_fn)(void* thisPtr);
+typedef void (__fastcall *SharedPtrEntityCtor_fn)(void* thisPtr, void* rawPtr);
+typedef void (__fastcall *SharedPtrEntityDtor_fn)(void* thisPtr);
 typedef bool (__fastcall *ItemMineBlock_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* level, int tile, int x, int y, int z, void* ownerSharedPtr);
 typedef float (__fastcall *PickaxeGetDestroySpeed_fn)(void* thisPtr, void* itemInstanceSharedPtr, void* tilePtr);
 typedef bool (__fastcall *PickaxeCanDestroySpecial_fn)(void* thisPtr, void* tilePtr);
@@ -85,6 +104,11 @@ typedef void (__fastcall *EntitySetPos_fn)(void* thisPtr, double x, double y, do
 typedef void* (__fastcall *EntityGetLookAngle_fn)(void* thisPtr);
 typedef void* (__fastcall *LivingEntityGetViewVector_fn)(void* thisPtr, float partialTicks);
 typedef void (__fastcall *EntityLerpMotion_fn)(void* thisPtr, double x, double y, double z);
+typedef std::wstring (__fastcall *EntityGetEncodeId_fn)(std::shared_ptr<Entity> entitySharedPtr);
+typedef std::wstring (__fastcall *EntityGetEncodeIdById_fn)(int entityIoValue);
+typedef void (__fastcall *EntityGetNetworkName_fn)(std::wstring* out, void* thisPtr);
+typedef void (__fastcall *LivingEntityTickDeath_fn)(void* thisPtr);
+typedef void (__fastcall *LivingEntityDropDeathLoot_fn)(void* thisPtr, bool killedByPlayer, int lootingLevel);
 typedef bool (__fastcall *InventoryRemoveResource_fn)(void* thisPtr, int itemId);
 typedef void (__fastcall *ItemInstanceHurtAndBreak_fn)(void* thisPtr, int amount, void* ownerSharedPtr);
 typedef void (__fastcall *AbstractContainerMenuBroadcastChanges_fn)(void* thisPtr);
@@ -204,6 +228,25 @@ namespace GameHooks
     extern MinecraftSetLevel_fn   Original_MinecraftSetLevel;
     extern EntityPlayStepSound_fn Original_EntityPlayStepSound;
     extern EntityCheckInsideTiles_fn Original_EntityCheckInsideTiles;
+    extern LivingEntityDropDeathLoot_fn Original_LivingEntityDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_MobDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_ChickenDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_CowDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_PigDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_SheepDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_SquidDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_OcelotDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_SnowManDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_VillagerGolemDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_PigZombieDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_SpiderDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_SkeletonDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_WitchDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_BlazeDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_EnderManDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_GhastDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_LavaSlimeDropDeathLoot;
+    extern LivingEntityDropDeathLoot_fn Original_WitherBossDropDeathLoot;
     extern TexturesBindTextureResource_fn Original_TexturesBindTextureResource;
     extern TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName;
     extern TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex;
@@ -320,6 +363,25 @@ namespace GameHooks
     void __fastcall Hooked_MinecraftSetLevel(void* thisPtr, void* level, int message, void* forceInsertPlayerSharedPtr, bool doForceStatsSave, bool bPrimaryPlayerSignedOut);
     void __fastcall Hooked_EntityPlayStepSound(void* thisPtr, int xt, int yt, int zt, int t);
     void __fastcall Hooked_EntityCheckInsideTiles(void* thisPtr);
+    void __fastcall Hooked_LivingEntityDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_MobDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_ChickenDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_CowDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_PigDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_SheepDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_SquidDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_OcelotDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_SnowManDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_VillagerGolemDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_PigZombieDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_SpiderDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_SkeletonDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_WitchDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_BlazeDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_EnderManDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_GhastDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_LavaSlimeDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
+    void __fastcall Hooked_WitherBossDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel);
     void __fastcall Hooked_TexturesBindTextureResource(void* thisPtr, void* resourcePtr);
     int __fastcall Hooked_TexturesLoadTextureByName(void* thisPtr, int texId, const std::wstring& resourceName);
     int __fastcall Hooked_TexturesLoadTextureByIndex(void* thisPtr, int idx);
@@ -350,6 +412,23 @@ namespace GameHooks
                           void* entityMoveTo,
                           void* entitySetPos);
     void SetItemRenderSymbols(void* itemEntityGetItem);
+    void SetLootSymbols(void* operatorNew,
+                        void* itemInstanceCtor,
+                        void* itemInstanceSharedPtrCtor,
+                        void* itemInstanceSharedPtrDtor,
+                        void* entitySharedPtrCtor,
+                        void* entitySharedPtrDtor,
+                        void* itemEntitySharedPtrDtor,
+                        void* itemEntityCtorWithItem,
+                        void* itemEntitySetItem,
+                        void* itemEntityMakeShared,
+                        void* entitySpawnAtLocation,
+                        void* entitySpawnAtLocationInt,
+                        void* itemInstanceSetAuxValue,
+                        void* entityGetEncodeId,
+                        void* entityGetEncodeIdById,
+                        void* entityGetNetworkName);
+    bool SpawnItemFromEntity(void* entityPtr, int itemId, int count, int aux);
     void SetUseActionSymbols(void* inventoryRemoveResource,
                              void* inventoryVtable,
                              void* itemInstanceHurtAndBreak,

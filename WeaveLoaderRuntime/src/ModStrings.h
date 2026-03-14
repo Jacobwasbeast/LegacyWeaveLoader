@@ -21,5 +21,5 @@ namespace ModStrings
     // After the string table is loaded (e.g. during PreInit), call this
     // to inject all previously registered mod strings into the game's
     // m_stringsVec so that inlined GetString calls find them.
-    void InjectAllIntoGameTable();
+    bool InjectAllIntoGameTable();
 }

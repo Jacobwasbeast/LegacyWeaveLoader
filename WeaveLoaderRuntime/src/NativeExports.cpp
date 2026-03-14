@@ -363,6 +363,11 @@ int native_register_item(
     {
         LogUtil::Log("[WeaveLoader] Warning: failed to create game Item for '%s' id=%d", namespacedId, id);
     }
+    else if (!GameObjectFactory::IsRuntimeItemValid(id))
+    {
+        LogUtil::Log("[WeaveLoader] ERROR: item '%s' id=%d was created but Item::items[%d] is null",
+                     namespacedId, id, id);
+    }
 
     return id;
 }
@@ -751,6 +756,13 @@ int native_summon_entity_by_id(int numericEntityId, double x, double y, double z
     LogUtil::Log("[WeaveLoader] Summoned entity=%d at (%.2f, %.2f, %.2f)",
                  numericEntityId, x, y, z);
     return 1;
+}
+
+int native_spawn_item_from_entity(void* entityPtr, int numericItemId, int count, int aux)
+{
+    if (!entityPtr || numericItemId < 0 || count <= 0)
+        return 0;
+    return GameHooks::SpawnItemFromEntity(entityPtr, numericItemId, count, aux) ? 1 : 0;
 }
 
 int native_level_has_neighbor_signal(void* levelPtr, int x, int y, int z)

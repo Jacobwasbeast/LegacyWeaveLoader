@@ -14,6 +14,7 @@
 #include "WorldIdRemap.h"
 #include "ModelRegistry.h"
 #include "ItemRenderRegistry.h"
+#include "GameObjectFactory.h"
 #include "PdbParser.h"
 #include <Windows.h>
 #include <gl/GL.h>
@@ -36,9 +37,16 @@
 #include <vector>
 #include <intrin.h>
 
+class ItemInstance;
+class ItemEntity;
+
 namespace GameHooks
 {
     static bool IsReadableRange(const void* ptr, size_t bytes);
+    static bool LooksLikeEntityPtrStrict(void* candidate);
+    static bool IsEntityMarkedRemoved(void* entityPtr);
+    static bool TryReadEntityPos(void* entityPtr, double& x, double& y, double& z);
+    static bool TryReadEntityPosViaVirtual(void* entityPtr, double& x, double& y, double& z);
     RunStaticCtors_fn     Original_RunStaticCtors = nullptr;
     MinecraftTick_fn      Original_MinecraftTick = nullptr;
     MinecraftInit_fn      Original_MinecraftInit = nullptr;
@@ -124,6 +132,25 @@ namespace GameHooks
     MinecraftSetLevel_fn   Original_MinecraftSetLevel = nullptr;
     EntityPlayStepSound_fn Original_EntityPlayStepSound = nullptr;
     EntityCheckInsideTiles_fn Original_EntityCheckInsideTiles = nullptr;
+    LivingEntityDropDeathLoot_fn Original_LivingEntityDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_MobDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_ChickenDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_CowDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_PigDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_SheepDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_SquidDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_OcelotDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_SnowManDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_VillagerGolemDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_PigZombieDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_SpiderDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_SkeletonDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_WitchDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_BlazeDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_EnderManDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_GhastDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_LavaSlimeDropDeathLoot = nullptr;
+    LivingEntityDropDeathLoot_fn Original_WitherBossDropDeathLoot = nullptr;
     TexturesBindTextureResource_fn Original_TexturesBindTextureResource = nullptr;
     TexturesLoadTextureByName_fn Original_TexturesLoadTextureByName = nullptr;
     TexturesLoadTextureByIndex_fn Original_TexturesLoadTextureByIndex = nullptr;
@@ -158,6 +185,11 @@ namespace GameHooks
 
     namespace
     {
+        using EntitySpawnAtLocation_fn = void (__fastcall *)(void* outSharedPtr, void* thisPtr, void* itemSharedPtr, float yOffset);
+        using EntitySpawnAtLocationInt_fn = void (__fastcall *)(void* outSharedPtr, void* thisPtr, int resource, int count, float yOffset);
+        using ItemEntitySetItemTyped_fn = void (__fastcall *)(void* thisPtr, std::shared_ptr<ItemInstance> itemInstance);
+        using ItemEntityMakeShared_fn = void (__fastcall *)(void* outSharedPtr, void* levelRefPtr, double* xRef, double yValue, double* zRef, void* itemSharedRef);
+
         struct AABBRaw
         {
             double x0, y0, z0;
@@ -178,6 +210,23 @@ namespace GameHooks
             int f;
             void* pos;
         };
+
+        static OperatorNew_fn s_operatorNew = nullptr;
+        static ItemInstanceCtor_fn s_itemInstanceCtor = nullptr;
+        static SharedPtrItemInstanceCtor_fn s_itemInstanceSharedPtrCtor = nullptr;
+        static SharedPtrItemInstanceDtor_fn s_itemInstanceSharedPtrDtor = nullptr;
+        static SharedPtrEntityCtor_fn s_entitySharedPtrCtor = nullptr;
+        static SharedPtrEntityDtor_fn s_entitySharedPtrDtor = nullptr;
+        static SharedPtrItemEntityDtor_fn s_itemEntitySharedPtrDtor = nullptr;
+        static ItemEntityCtorWithItem_fn s_itemEntityCtorWithItem = nullptr;
+        static ItemEntitySetItem_fn s_itemEntitySetItem = nullptr;
+        static ItemEntityMakeShared_fn s_itemEntityMakeShared = nullptr;
+        static EntitySpawnAtLocation_fn s_entitySpawnAtLocation = nullptr;
+        static EntitySpawnAtLocationInt_fn s_entitySpawnAtLocationInt = nullptr;
+        static ItemInstanceSetAuxValue_fn s_itemInstanceSetAuxValue = nullptr;
+        static EntityGetEncodeId_fn s_entityGetEncodeId = nullptr;
+        static EntityGetEncodeIdById_fn s_entityGetEncodeIdById = nullptr;
+        static EntityGetNetworkName_fn s_entityGetNetworkName = nullptr;
 
 
         static bool Intersects(const AABBRaw* box, double x0, double y0, double z0, double x1, double y1, double z1)
@@ -281,6 +330,8 @@ namespace GameHooks
         static int s_entityLevelOffset = -1;
         static std::atomic<bool> s_entityBbOffsetTried{false};
         static int s_entityBbOffset = -1;
+        static std::atomic<bool> s_entityIdOffsetTried{false};
+        static int s_entityIdOffset = -1;
         static int s_rotationLogCount = 0;
 
         static bool ReadFileToString(const char* path, std::string& out)
@@ -495,6 +546,36 @@ namespace GameHooks
 
             s_entityBbOffset = offset;
             LogUtil::Log("[WeaveLoader] ModelRegistry: Entity.bb offset = 0x%X", s_entityBbOffset);
+            return true;
+        }
+
+        static bool TryResolveEntityIdOffset()
+        {
+            bool expected = false;
+            if (!s_entityIdOffsetTried.compare_exchange_strong(expected, true))
+                return s_entityIdOffset >= 0;
+
+            const char* baseDir = LogUtil::GetBaseDir();
+            if (!baseDir || baseDir[0] == '\0')
+                return false;
+
+            std::string json;
+            std::string path = std::string(baseDir) + "metadata\\offsets.json";
+            if (!ReadFileToString(path.c_str(), json))
+            {
+                path = std::string(baseDir) + "offsets.json";
+                if (!ReadFileToString(path.c_str(), json))
+                    return false;
+            }
+
+            int offset = -1;
+            if (!ExtractOffsetForField(json, "Entity", "entityId", offset))
+                return false;
+            if (offset < 0)
+                return false;
+
+            s_entityIdOffset = offset;
+            LogUtil::Log("[WeaveLoader] ModelRegistry: Entity.entityId offset = 0x%X", s_entityIdOffset);
             return true;
         }
 
@@ -804,7 +885,8 @@ namespace GameHooks
     static thread_local int s_firstPersonRenderDepth = 0;
     static std::string s_modsPath;
     static std::unordered_map<std::string, std::string> s_modAssetRoots;
-    static bool s_modAssetsIndexed = false;
+    static std::unordered_map<std::string, std::string> s_modDataRoots;
+    static std::atomic<bool> s_modAssetsIndexed{false};
     static std::atomic<bool> s_modAssetsIndexing{false};
     static std::mutex s_modAssetsMutex;
     static std::unordered_map<int, int> s_itemRenderLogCount;
@@ -817,6 +899,7 @@ namespace GameHooks
     static constexpr ptrdiff_t kEntityXOffset = 0x78;
     static constexpr ptrdiff_t kEntityYOffset = 0x80;
     static constexpr ptrdiff_t kEntityZOffset = 0x88;
+    static constexpr ptrdiff_t kEntityLevelOffset = 0x58;
     static constexpr ptrdiff_t kEntityRemovedOffset = 0xC7;
     static constexpr ptrdiff_t kFireballOwnerOffset = 0x1D0;
     static constexpr ptrdiff_t kFireballXPowerOffset = 0x1E8;
@@ -855,6 +938,13 @@ namespace GameHooks
     static uintptr_t s_gameModuleEnd = 0;
     static std::vector<void*> s_spawnedEntities;
     static int s_outOfWorldGuardLogCount = 0;
+    struct RecentLootDispatch
+    {
+        ULONGLONG timeMs;
+        int result;
+    };
+    static std::unordered_map<uint64_t, RecentLootDispatch> s_recentLootDispatch;
+    static std::mutex s_recentLootDispatchMutex;
     static int s_pendingServerUseItemId = -1;
     static LevelGetTile_fn s_levelGetTile = nullptr;
     static std::atomic<uint32_t> s_tickCounter{0};
@@ -877,6 +967,8 @@ namespace GameHooks
     static bool s_preInitCalled = false;
     static bool s_initCalled = false;
     static bool s_postInitCalled = false;
+    static bool s_modStringsInjected = false;
+    static uint32_t s_modStringsLastAttemptTick = 0;
     static thread_local bool s_inventoryShapeOverrideActive = false;
     static thread_local void* s_inventoryShapeOverrideTile = nullptr;
     static thread_local ModelBox s_inventoryShapeOverrideBox{};
@@ -889,6 +981,18 @@ namespace GameHooks
         s_pageResource.path = L"";
         s_pageResource.preloaded = false;
         s_pageResourceInit = true;
+    }
+
+    static void TryInjectModStrings()
+    {
+        if (s_modStringsInjected)
+            return;
+        const uint32_t tick = s_tickCounter.load(std::memory_order_relaxed);
+        if (s_modStringsLastAttemptTick != 0 && tick < s_modStringsLastAttemptTick + 20)
+            return;
+        s_modStringsLastAttemptTick = tick;
+        if (ModStrings::InjectAllIntoGameTable())
+            s_modStringsInjected = true;
     }
 
     static void EnsureGameModuleRange()
@@ -1096,8 +1200,9 @@ namespace GameHooks
 
     static void BuildModAssetIndexLocked()
     {
+        s_modAssetsIndexed.store(false, std::memory_order_relaxed);
         s_modAssetRoots.clear();
-        s_modAssetsIndexed = true;
+        s_modDataRoots.clear();
         if (s_modsPath.empty())
             return;
 
@@ -1114,54 +1219,90 @@ namespace GameHooks
 
             std::string modFolder = fd.cFileName;
             std::string assetsPath = s_modsPath + "\\" + modFolder + "\\assets";
+            std::string dataPath = s_modsPath + "\\" + modFolder + "\\data";
             DWORD attr = GetFileAttributesA(assetsPath.c_str());
-            if (attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
-                continue;
-
-            WIN32_FIND_DATAA nsfd;
-            std::string nsSearch = assetsPath + "\\*";
-            HANDLE hNs = FindFirstFileA(nsSearch.c_str(), &nsfd);
-            if (hNs == INVALID_HANDLE_VALUE)
-                continue;
-            do
+            if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
             {
-                if (!(nsfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
-                if (nsfd.cFileName[0] == '.') continue;
-
-                std::string nsName = ToLowerAscii(nsfd.cFileName);
-                if (nsName.empty())
-                    continue;
-
-                if (s_modAssetRoots.find(nsName) == s_modAssetRoots.end())
+                WIN32_FIND_DATAA nsfd;
+                std::string nsSearch = assetsPath + "\\*";
+                HANDLE hNs = FindFirstFileA(nsSearch.c_str(), &nsfd);
+                if (hNs != INVALID_HANDLE_VALUE)
                 {
-                    s_modAssetRoots.emplace(nsName, assetsPath);
+                    do
+                    {
+                        if (!(nsfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+                        if (nsfd.cFileName[0] == '.') continue;
+
+                        std::string nsName = ToLowerAscii(nsfd.cFileName);
+                        if (nsName.empty())
+                            continue;
+
+                        if (s_modAssetRoots.find(nsName) == s_modAssetRoots.end())
+                        {
+                            s_modAssetRoots.emplace(nsName, assetsPath);
+                        }
+                        else
+                        {
+                            LogUtil::Log("[WeaveLoader] ModAssets: duplicate namespace '%s' (folder=%s) ignored",
+                                         nsName.c_str(), modFolder.c_str());
+                        }
+                    } while (FindNextFileA(hNs, &nsfd));
+                    FindClose(hNs);
                 }
-                else
+            }
+
+            attr = GetFileAttributesA(dataPath.c_str());
+            if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
+            {
+                WIN32_FIND_DATAA nsfd;
+                std::string nsSearch = dataPath + "\\*";
+                HANDLE hNs = FindFirstFileA(nsSearch.c_str(), &nsfd);
+                if (hNs != INVALID_HANDLE_VALUE)
                 {
-                    LogUtil::Log("[WeaveLoader] ModAssets: duplicate namespace '%s' (folder=%s) ignored",
-                                 nsName.c_str(), modFolder.c_str());
+                    do
+                    {
+                        if (!(nsfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+                        if (nsfd.cFileName[0] == '.') continue;
+
+                        std::string nsName = ToLowerAscii(nsfd.cFileName);
+                        if (nsName.empty())
+                            continue;
+
+                        if (s_modDataRoots.find(nsName) == s_modDataRoots.end())
+                        {
+                            s_modDataRoots.emplace(nsName, dataPath);
+                        }
+                        else
+                        {
+                            LogUtil::Log("[WeaveLoader] ModData: duplicate namespace '%s' (folder=%s) ignored",
+                                         nsName.c_str(), modFolder.c_str());
+                        }
+                    } while (FindNextFileA(hNs, &nsfd));
+                    FindClose(hNs);
                 }
-            } while (FindNextFileA(hNs, &nsfd));
-            FindClose(hNs);
+            }
         } while (FindNextFileA(h, &fd));
         FindClose(h);
+        s_modAssetsIndexed.store(true, std::memory_order_release);
     }
 
     static void StartModAssetIndexAsync()
     {
         if (s_modsPath.empty())
             return;
-        if (s_modAssetsIndexed || s_modAssetsIndexing.load())
+        if (s_modAssetsIndexed.load(std::memory_order_acquire) || s_modAssetsIndexing.load())
             return;
         s_modAssetsIndexing = true;
         std::thread([]()
         {
+            size_t nsCount = 0;
             {
                 std::lock_guard<std::mutex> guard(s_modAssetsMutex);
                 BuildModAssetIndexLocked();
+                nsCount = s_modAssetRoots.size();
             }
             s_modAssetsIndexing = false;
-            LogUtil::Log("[WeaveLoader] ModAssets: async index complete (%zu namespaces)", s_modAssetRoots.size());
+            LogUtil::Log("[WeaveLoader] ModAssets: async index complete (%zu namespaces)", nsCount);
         }).detach();
     }
 
@@ -1172,10 +1313,10 @@ namespace GameHooks
             StartModAssetIndexAsync();
             return;
         }
-        if (s_modAssetsIndexed)
+        if (s_modAssetsIndexed.load(std::memory_order_acquire))
             return;
         std::lock_guard<std::mutex> guard(s_modAssetsMutex);
-        if (!s_modAssetsIndexed)
+        if (!s_modAssetsIndexed.load(std::memory_order_relaxed))
             BuildModAssetIndexLocked();
     }
 
@@ -1221,10 +1362,10 @@ namespace GameHooks
 
         if (IsAsyncModAssetsEnabled())
         {
-            if (!s_modAssetsIndexed)
+            if (!s_modAssetsIndexed.load(std::memory_order_acquire))
             {
                 StartModAssetIndexAsync();
-                if (!s_modAssetsIndexed)
+                if (!s_modAssetsIndexed.load(std::memory_order_acquire))
                     return false;
             }
         }
@@ -1232,11 +1373,87 @@ namespace GameHooks
         {
             EnsureModAssetIndex();
         }
-        auto it = s_modAssetRoots.find(nsKey);
-        if (it == s_modAssetRoots.end())
+        std::string rootPath;
+        {
+            std::lock_guard<std::mutex> guard(s_modAssetsMutex);
+            auto it = s_modAssetRoots.find(nsKey);
+            if (it == s_modAssetRoots.end())
+                return false;
+            rootPath = it->second;
+        }
+
+        std::wstring rootW(rootPath.begin(), rootPath.end());
+        std::wstring relW = ns + L"/" + rel;
+        for (wchar_t& ch : relW)
+        {
+            if (ch == L'/')
+                ch = L'\\';
+        }
+        std::wstring fullPath = rootW + L"\\" + relW;
+        if (!FileExistsW(fullPath))
             return false;
 
-        std::wstring rootW(it->second.begin(), it->second.end());
+        outPath = fullPath;
+        return true;
+    }
+
+    static bool TryResolveModDataPath(const std::wstring& requestPath, std::wstring& outPath)
+    {
+        if (s_modsPath.empty())
+            return false;
+
+        std::wstring lower = NormalizeLowerPath(requestPath);
+        if (lower.find(L"://") != std::wstring::npos)
+            return false;
+
+        const std::wstring kData = L"/data/";
+        size_t dataPos = lower.find(kData);
+        if (dataPos == std::wstring::npos)
+            return false;
+
+        size_t nsStart = dataPos + kData.size();
+        if (nsStart >= lower.size())
+            return false;
+        size_t nsEnd = lower.find(L'/', nsStart);
+        if (nsEnd == std::wstring::npos || nsEnd <= nsStart)
+            return false;
+
+        std::wstring ns = lower.substr(nsStart, nsEnd - nsStart);
+        if (ns.empty())
+            return false;
+
+        size_t relStart = nsEnd + 1;
+        if (relStart >= lower.size())
+            return false;
+        std::wstring rel = lower.substr(relStart);
+
+        std::string nsKey = WStringToLowerAscii(ns);
+        if (nsKey.empty())
+            return false;
+
+        if (IsAsyncModAssetsEnabled())
+        {
+            if (!s_modAssetsIndexed.load(std::memory_order_acquire))
+            {
+                StartModAssetIndexAsync();
+                if (!s_modAssetsIndexed.load(std::memory_order_acquire))
+                    return false;
+            }
+        }
+        else
+        {
+            EnsureModAssetIndex();
+        }
+        std::string rootPath;
+        {
+            std::lock_guard<std::mutex> guard(s_modAssetsMutex);
+            auto it = s_modDataRoots.find(nsKey);
+            if (it == s_modDataRoots.end())
+                return false;
+            rootPath = it->second;
+        }
+
+        std::wstring rootW(rootPath.begin(), rootPath.end());
         std::wstring relW = ns + L"/" + rel;
         for (wchar_t& ch : relW)
         {
@@ -1710,6 +1927,372 @@ namespace GameHooks
         s_itemEntityGetItem = reinterpret_cast<ItemEntityGetItem_fn>(itemEntityGetItem);
     }
 
+    void SetLootSymbols(void* operatorNew,
+                        void* itemInstanceCtor,
+                        void* itemInstanceSharedPtrCtor,
+                        void* itemInstanceSharedPtrDtor,
+                        void* entitySharedPtrCtor,
+                        void* entitySharedPtrDtor,
+                        void* itemEntitySharedPtrDtor,
+                        void* itemEntityCtorWithItem,
+                        void* itemEntitySetItem,
+                        void* itemEntityMakeShared,
+                        void* entitySpawnAtLocation,
+                        void* entitySpawnAtLocationInt,
+                        void* itemInstanceSetAuxValue,
+                        void* entityGetEncodeId,
+                        void* entityGetEncodeIdById,
+                        void* entityGetNetworkName)
+    {
+        s_operatorNew = reinterpret_cast<OperatorNew_fn>(operatorNew);
+        s_itemInstanceCtor = reinterpret_cast<ItemInstanceCtor_fn>(itemInstanceCtor);
+        s_itemInstanceSharedPtrCtor = reinterpret_cast<SharedPtrItemInstanceCtor_fn>(itemInstanceSharedPtrCtor);
+        s_itemInstanceSharedPtrDtor = reinterpret_cast<SharedPtrItemInstanceDtor_fn>(itemInstanceSharedPtrDtor);
+        s_entitySharedPtrCtor = reinterpret_cast<SharedPtrEntityCtor_fn>(entitySharedPtrCtor);
+        s_entitySharedPtrDtor = reinterpret_cast<SharedPtrEntityDtor_fn>(entitySharedPtrDtor);
+        s_itemEntitySharedPtrDtor = reinterpret_cast<SharedPtrItemEntityDtor_fn>(itemEntitySharedPtrDtor);
+        s_itemEntityCtorWithItem = reinterpret_cast<ItemEntityCtorWithItem_fn>(itemEntityCtorWithItem);
+        s_itemEntitySetItem = reinterpret_cast<ItemEntitySetItem_fn>(itemEntitySetItem);
+        s_itemEntityMakeShared = reinterpret_cast<ItemEntityMakeShared_fn>(itemEntityMakeShared);
+        s_entitySpawnAtLocation = reinterpret_cast<EntitySpawnAtLocation_fn>(entitySpawnAtLocation);
+        s_entitySpawnAtLocationInt = reinterpret_cast<EntitySpawnAtLocationInt_fn>(entitySpawnAtLocationInt);
+        s_itemInstanceSetAuxValue = reinterpret_cast<ItemInstanceSetAuxValue_fn>(itemInstanceSetAuxValue);
+        s_entityGetEncodeId = reinterpret_cast<EntityGetEncodeId_fn>(entityGetEncodeId);
+        s_entityGetEncodeIdById = reinterpret_cast<EntityGetEncodeIdById_fn>(entityGetEncodeIdById);
+        s_entityGetNetworkName = reinterpret_cast<EntityGetNetworkName_fn>(entityGetNetworkName);
+    }
+
+    static bool LooksLikeLevelPtr(void* levelPtr)
+    {
+        if (!levelPtr || !IsReadableRange(levelPtr, sizeof(void*)))
+            return false;
+        void* vt = *reinterpret_cast<void**>(levelPtr);
+        if (!IsCanonicalUserPtr(vt) || !IsGameCodePtr(vt))
+            return false;
+        if (!IsReadableRange(static_cast<char*>(levelPtr) + kLevelIsClientSideOffset, sizeof(bool)))
+            return false;
+        return true;
+    }
+
+    static bool TryFindLevelPtrInEntity(void* entityPtr, void*& outLevelPtr)
+    {
+        outLevelPtr = nullptr;
+        if (!entityPtr)
+            return false;
+        if (TryGetEntityLevel(entityPtr, outLevelPtr) && LooksLikeLevelPtr(outLevelPtr))
+            return true;
+
+        const char* base = static_cast<const char*>(entityPtr);
+        constexpr size_t kScanBytes = 0x200;
+        for (size_t off = 0; off + sizeof(void*) <= kScanBytes; off += sizeof(void*))
+        {
+            const void* addr = base + off;
+            if (!IsReadableRange(addr, sizeof(void*)))
+                continue;
+            void* candidate = *reinterpret_cast<void* const*>(addr);
+            if (LooksLikeLevelPtr(candidate))
+            {
+                outLevelPtr = candidate;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static bool TryGetLevelIsClientSide(void* levelPtr, bool& outIsClientSide)
+    {
+        outIsClientSide = false;
+        if (!LooksLikeLevelPtr(levelPtr))
+            return false;
+        outIsClientSide =
+            *reinterpret_cast<bool*>(static_cast<char*>(levelPtr) + kLevelIsClientSideOffset);
+        return true;
+    }
+
+    static uint64_t MakeLootDispatchCacheKey(void* entityPtr, int dispatchKind)
+    {
+        const uint64_t p = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(entityPtr));
+        return (p << 1) ^ static_cast<uint64_t>(dispatchKind & 1);
+    }
+
+    static bool TryGetCachedLootDispatchResult(void* entityPtr, int dispatchKind, int& outResult)
+    {
+        if (!entityPtr)
+            return false;
+        const uint64_t key = MakeLootDispatchCacheKey(entityPtr, dispatchKind);
+        const ULONGLONG nowMs = GetTickCount64();
+        constexpr ULONGLONG kDedupWindowMs = 250;
+        constexpr ULONGLONG kPurgeWindowMs = 10000;
+
+        std::lock_guard<std::mutex> guard(s_recentLootDispatchMutex);
+        if (s_recentLootDispatch.size() > 4096)
+        {
+            for (auto it = s_recentLootDispatch.begin(); it != s_recentLootDispatch.end(); )
+            {
+                if (nowMs > it->second.timeMs && (nowMs - it->second.timeMs) > kPurgeWindowMs)
+                    it = s_recentLootDispatch.erase(it);
+                else
+                    ++it;
+            }
+        }
+
+        auto it = s_recentLootDispatch.find(key);
+        if (it == s_recentLootDispatch.end())
+            return false;
+        if (nowMs < it->second.timeMs || (nowMs - it->second.timeMs) > kDedupWindowMs)
+            return false;
+        outResult = it->second.result;
+        return true;
+    }
+
+    static void CacheLootDispatchResult(void* entityPtr, int dispatchKind, int result)
+    {
+        if (!entityPtr)
+            return;
+        const uint64_t key = MakeLootDispatchCacheKey(entityPtr, dispatchKind);
+        std::lock_guard<std::mutex> guard(s_recentLootDispatchMutex);
+        s_recentLootDispatch[key] = { GetTickCount64(), result };
+    }
+
+    static bool TryCallItemInstanceCtor(void* rawItem, int itemId, int count, int aux)
+    {
+        if (!rawItem || !s_itemInstanceCtor)
+            return false;
+        __try
+        {
+            s_itemInstanceCtor(rawItem, itemId, count, aux);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    static bool TryCallItemEntityCtorWithItem(void* rawEntity, void* levelPtr, double x, double y, double z, void* itemSharedPtr)
+    {
+        if (!rawEntity || !levelPtr || !itemSharedPtr || !s_itemEntityCtorWithItem)
+            return false;
+        __try
+        {
+            s_itemEntityCtorWithItem(rawEntity, levelPtr, x, y, z, itemSharedPtr);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    static void TrackSpawnedEntity(void* entityPtr);
+    static void MarkEntityRemoved(void* entityPtr);
+
+    static bool TrySpawnItemEntityDirect(void* sourceEntityPtr, SharedPtrBlob& itemShared)
+    {
+        if (!sourceEntityPtr || !s_operatorNew || !s_itemEntityCtorWithItem || !s_entitySharedPtrCtor || !s_levelAddEntity)
+            return false;
+
+        void* levelPtr = nullptr;
+        if (!TryFindLevelPtrInEntity(sourceEntityPtr, levelPtr) || !LooksLikeLevelPtr(levelPtr))
+            return false;
+
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        if (!TryReadEntityPos(sourceEntityPtr, x, y, z) &&
+            !TryReadEntityPosViaVirtual(sourceEntityPtr, x, y, z))
+        {
+            return false;
+        }
+
+        constexpr size_t kItemEntityAllocSize = 0x400;
+        void* rawEntity = s_operatorNew(kItemEntityAllocSize);
+        if (!rawEntity)
+            return false;
+
+        memset(rawEntity, 0, kItemEntityAllocSize);
+        if (!TryCallItemEntityCtorWithItem(rawEntity, levelPtr, x, y, z, &itemShared))
+            return false;
+
+        SharedPtrBlob entityShared{};
+        __try
+        {
+            s_entitySharedPtrCtor(&entityShared, rawEntity);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            entityShared.ptr = nullptr;
+            entityShared.ref = nullptr;
+        }
+
+        if (!entityShared.ptr)
+            return false;
+
+        bool added = false;
+        __try
+        {
+            added = s_levelAddEntity(levelPtr, &entityShared);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            added = false;
+        }
+
+        void* spawnedPtr = DecodeEntityPtrFromSharedArg(&entityShared);
+        if (added && spawnedPtr && LooksLikeEntityPtr(spawnedPtr))
+            TrackSpawnedEntity(spawnedPtr);
+
+        if (s_entitySharedPtrDtor)
+            s_entitySharedPtrDtor(&entityShared);
+        else if (s_itemEntitySharedPtrDtor)
+            s_itemEntitySharedPtrDtor(&entityShared);
+
+        return added;
+    }
+
+    static bool TrySpawnItemEntityViaEntityIO(void* entityPtr, void* itemSharedPtr, void* levelHint)
+    {
+        if (!entityPtr || !itemSharedPtr)
+            return false;
+        if (!s_entityIoNewById || !s_itemEntitySetItem || !s_levelAddEntity)
+            return false;
+
+        void* levelPtr = levelHint;
+        if (!LooksLikeLevelPtr(levelPtr))
+        {
+            if (!TryGetEntityLevel(entityPtr, levelPtr) || !LooksLikeLevelPtr(levelPtr))
+                levelPtr = nullptr;
+        }
+        if (!levelPtr && LooksLikeLevelPtr(s_currentLevel))
+            levelPtr = s_currentLevel;
+        if (!LooksLikeLevelPtr(levelPtr))
+            return false;
+
+        std::shared_ptr<void> entity;
+        s_entityIoNewById(&entity, 1, levelPtr);
+        if (!entity)
+            return false;
+
+        ItemEntitySetItemTyped_fn setItemTyped =
+            reinterpret_cast<ItemEntitySetItemTyped_fn>(s_itemEntitySetItem);
+        std::shared_ptr<ItemInstance>& typedItem =
+            *reinterpret_cast<std::shared_ptr<ItemInstance>*>(itemSharedPtr);
+        setItemTyped(entity.get(), typedItem);
+
+        // ItemEntity::throwTime lives at +0x1DC in this build. LegacyMinecraft sets it to 10
+        // in Entity::spawnAtLocation so the drop does not get picked up immediately.
+        *reinterpret_cast<int*>(reinterpret_cast<uint8_t*>(entity.get()) + 0x1DC) = 10;
+
+        double x = 0.0, y = 0.0, z = 0.0;
+        if (TryReadEntityPos(entityPtr, x, y, z) ||
+            TryReadEntityPosViaVirtual(entityPtr, x, y, z))
+        {
+            if (s_entityMoveTo)
+                s_entityMoveTo(entity.get(), x, y, z, 0.0f, 0.0f);
+            else if (s_entitySetPos)
+                s_entitySetPos(entity.get(), x, y, z);
+        }
+
+        bool added = s_levelAddEntity(levelPtr, &entity);
+        if (added)
+        {
+            TrackSpawnedEntity(entity.get());
+        }
+        return added;
+    }
+
+    bool SpawnItemFromEntity(void* entityPtr, int itemId, int count, int aux)
+    {
+        static int s_spawnItemAttemptLogCount = 0;
+        if (s_spawnItemAttemptLogCount < 50)
+        {
+            LogUtil::Log("[WeaveLoader] SpawnItemFromEntity attempt itemId=%d count=%d aux=%d entity=%p",
+                         itemId, count, aux, entityPtr);
+            s_spawnItemAttemptLogCount++;
+        }
+        if (!entityPtr || itemId <= 0 || count <= 0)
+            return false;
+        if (!GameObjectFactory::IsRuntimeItemValid(itemId))
+        {
+            static int s_invalidLootItemLogCount = 0;
+            if (s_invalidLootItemLogCount < 20)
+            {
+                LogUtil::Log("[WeaveLoader] SpawnItemFromEntity rejected unresolved item id=%d count=%d aux=%d",
+                             itemId, count, aux);
+                s_invalidLootItemLogCount++;
+            }
+            return false;
+        }
+        if (!LooksLikeEntityPtr(entityPtr))
+            return false;
+        if (IsEntityMarkedRemoved(entityPtr))
+            return false;
+        void* levelPtr = nullptr;
+        if ((!TryGetEntityLevel(entityPtr, levelPtr) || !LooksLikeLevelPtr(levelPtr)) &&
+            LooksLikeLevelPtr(s_currentLevel))
+        {
+            levelPtr = s_currentLevel;
+        }
+        bool isClientSide = false;
+        if (!TryGetLevelIsClientSide(levelPtr, isClientSide))
+            return false;
+        if (isClientSide)
+        {
+            static int s_clientLootRejectLogCount = 0;
+            if (s_clientLootRejectLogCount < 10)
+            {
+                LogUtil::Log("[WeaveLoader] SpawnItemFromEntity rejected on client side entity=%p id=%d count=%d aux=%d",
+                             entityPtr, itemId, count, aux);
+                s_clientLootRejectLogCount++;
+            }
+            return false;
+        }
+
+        if (s_operatorNew && s_itemInstanceCtor && s_itemInstanceSharedPtrCtor && s_itemInstanceSharedPtrDtor)
+        {
+            constexpr size_t kItemInstanceAllocSize = 256;
+            void* rawItem = s_operatorNew(kItemInstanceAllocSize);
+            if (!rawItem)
+                return false;
+            memset(rawItem, 0, kItemInstanceAllocSize);
+            if (!TryCallItemInstanceCtor(rawItem, itemId, count, aux))
+                return false;
+
+            SharedPtrBlob itemShared{};
+            s_itemInstanceSharedPtrCtor(&itemShared, rawItem);
+            if (!DecodeItemInstancePtrFromSharedArg(&itemShared))
+            {
+                s_itemInstanceSharedPtrDtor(&itemShared);
+                return false;
+            }
+
+            if (TrySpawnItemEntityViaEntityIO(entityPtr, &itemShared, levelPtr))
+            {
+                s_itemInstanceSharedPtrDtor(&itemShared);
+                return true;
+            }
+
+            s_itemInstanceSharedPtrDtor(&itemShared);
+        }
+
+        static int s_spawnMissingItemLogCount = 0;
+        if (s_spawnMissingItemLogCount < 10)
+        {
+            LogUtil::Log("[WeaveLoader] SpawnItemFromEntity missing supported path for id=%d count=%d aux=%d (entityIo=%p setItem=%p addEntity=%p new=%p ctor=%p spCtor=%p spDtor=%p)",
+                         itemId, count, aux, s_entityIoNewById, s_itemEntitySetItem, s_levelAddEntity, s_operatorNew, s_itemInstanceCtor, s_itemInstanceSharedPtrCtor, s_itemInstanceSharedPtrDtor);
+            s_spawnMissingItemLogCount++;
+        }
+
+        static int s_spawnFailedLogCount = 0;
+        if (s_spawnFailedLogCount < 10)
+        {
+            LogUtil::Log("[WeaveLoader] SpawnItemFromEntity failed to spawn id=%d count=%d aux=%d (entityIo=%p setItem=%p addEntity=%p)",
+                         itemId, count, aux, s_entityIoNewById, s_itemEntitySetItem, s_levelAddEntity);
+            s_spawnFailedLogCount++;
+        }
+        return false;
+    }
+
     void SetUseActionSymbols(void* inventoryRemoveResource,
                              void* inventoryVtable,
                              void* itemInstanceHurtAndBreak,
@@ -1889,6 +2472,77 @@ namespace GameHooks
             return false;
         if (!IsGameCodePtr(vt))
             return false;
+        return true;
+    }
+
+    static bool TryReadEntityPos(void* entityPtr, double& x, double& y, double& z)
+    {
+        x = y = z = 0.0;
+        if (!entityPtr)
+            return false;
+
+        char* base = static_cast<char*>(entityPtr);
+        if (!IsReadableRange(base + kEntityXOffset, sizeof(double)) ||
+            !IsReadableRange(base + kEntityYOffset, sizeof(double)) ||
+            !IsReadableRange(base + kEntityZOffset, sizeof(double)))
+            return false;
+
+        x = *reinterpret_cast<double*>(base + kEntityXOffset);
+        y = *reinterpret_cast<double*>(base + kEntityYOffset);
+        z = *reinterpret_cast<double*>(base + kEntityZOffset);
+        return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+    }
+
+    static bool TryReadEntityPosViaVirtual(void* entityPtr, double& x, double& y, double& z)
+    {
+        x = y = z = 0.0;
+        if (!entityPtr || !s_livingEntityGetPos)
+            return false;
+        __try
+        {
+            void* vec = s_livingEntityGetPos(entityPtr, 1.0f);
+            if (!IsReadableRange(vec, sizeof(double) * 3))
+                return false;
+            x = *reinterpret_cast<double*>(static_cast<char*>(vec) + 0x00);
+            y = *reinterpret_cast<double*>(static_cast<char*>(vec) + 0x08);
+            z = *reinterpret_cast<double*>(static_cast<char*>(vec) + 0x10);
+            return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+    }
+
+    static bool LooksLikeEntityPtrStrict(void* candidate)
+    {
+        if (!LooksLikeEntityPtr(candidate))
+            return false;
+        void* vt = *reinterpret_cast<void**>(candidate);
+        if (!IsReadableRange(vt, sizeof(void*)))
+            return false;
+        void* vtFn = *reinterpret_cast<void**>(vt);
+        if (!IsCanonicalUserPtr(vtFn) || !IsGameCodePtr(vtFn))
+            return false;
+        double x = 0.0, y = 0.0, z = 0.0;
+        if (!TryReadEntityPos(candidate, x, y, z))
+            return false;
+        return true;
+    }
+
+    static bool TryReadEntityNumericId(void* entityPtr, int& outId)
+    {
+        if (!entityPtr)
+            return false;
+        if (s_entityIdOffset < 0 && !TryResolveEntityIdOffset())
+            return false;
+        const char* base = static_cast<const char*>(entityPtr);
+        if (!IsReadableRange(base + s_entityIdOffset, sizeof(int)))
+            return false;
+        int id = *reinterpret_cast<const int*>(base + s_entityIdOffset);
+        if (id < 0 || id > 9999)
+            return false;
+        outId = id;
         return true;
     }
 
@@ -2127,6 +2781,98 @@ namespace GameHooks
         return true;
     }
 
+    static std::string WideToUtf8(const std::wstring& w)
+    {
+        if (w.empty())
+            return {};
+        if (w.size() > 256)
+            return {};
+        int len = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
+        if (len <= 0)
+            return {};
+        std::string out(len, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, w.c_str(), static_cast<int>(w.size()), out.data(), len, nullptr, nullptr);
+        return out;
+    }
+
+    static void NoopEntityDeleter(Entity*) {}
+
+    static bool TryCallEntityEncodeId(EntityGetEncodeId_fn fn, void* entityPtr, std::wstring* out)
+    {
+        if (!fn || !entityPtr || !out)
+            return false;
+        if (!LooksLikeEntityPtrStrict(entityPtr))
+            return false;
+        std::shared_ptr<Entity> entityShared(reinterpret_cast<Entity*>(entityPtr), NoopEntityDeleter);
+        std::wstring result = fn(entityShared);
+        if (result.empty())
+            return false;
+        if (result.size() > 256)
+            return false;
+        *out = std::move(result);
+        return true;
+    }
+
+    static bool TryCallEntityNetworkName(EntityGetNetworkName_fn fn, void* entityPtr, std::wstring* out)
+    {
+        if (!fn || !entityPtr || !out)
+            return false;
+        if (!LooksLikeEntityPtrStrict(entityPtr))
+            return false;
+        __try
+        {
+            fn(out, entityPtr);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+        return false;
+    }
+
+    static bool TryGetEntityEncodeId(void* entityPtr, std::string& outId)
+    {
+        if (!entityPtr)
+            return false;
+        if (!LooksLikeEntityPtrStrict(entityPtr))
+            return false;
+
+        std::wstring wName;
+        if (TryCallEntityEncodeId(s_entityGetEncodeId, entityPtr, &wName))
+        {
+            outId = WideToUtf8(wName);
+            if (!outId.empty())
+                return true;
+        }
+
+        if (TryCallEntityNetworkName(s_entityGetNetworkName, entityPtr, &wName))
+        {
+            std::string networkName = WideToUtf8(wName);
+            if (!networkName.empty())
+            {
+                // Common legacy format: "entity.Creeper.name" -> "Creeper"
+                const std::string prefix = "entity.";
+                const std::string suffix = ".name";
+                if (networkName.size() > (prefix.size() + suffix.size()) &&
+                    networkName.compare(0, prefix.size(), prefix) == 0 &&
+                    networkName.compare(networkName.size() - suffix.size(), suffix.size(), suffix) == 0)
+                {
+                    networkName = networkName.substr(prefix.size(), networkName.size() - prefix.size() - suffix.size());
+                }
+                outId = std::move(networkName);
+                if (!outId.empty())
+                    return true;
+            }
+        }
+
+        int numericId = -1;
+        if (!TryReadEntityNumericId(entityPtr, numericId) || !s_entityGetEncodeIdById)
+            return false;
+        wName = s_entityGetEncodeIdById(numericId);
+        if (wName.empty())
+            return false;
+        outId = WideToUtf8(wName);
+        return !outId.empty();
+    }
+
     static bool IsFireballFamilyEntityId(int entityNumericId)
     {
         return entityNumericId == 12
@@ -2234,6 +2980,111 @@ namespace GameHooks
             BlockUpdateNativeArgs args{ blockId, isClientSide, level, x, y, z };
             DotNetHost::CallBlockTick(&args, sizeof(args));
         }
+    }
+
+    struct EntityLootNativeArgs
+    {
+        int entityNumericId;
+        const char* entityId;
+        void* entityPtr;
+        int wasKilledByPlayer;
+        int playerBonusLevel;
+    };
+
+    static int DispatchEntityLoot(void* entityPtr, bool wasKilledByPlayer, int playerBonusLevel)
+    {
+        if (!entityPtr)
+            return 0;
+        if (!LooksLikeEntityPtrStrict(entityPtr))
+            return 0;
+        int cachedResult = 0;
+        if (TryGetCachedLootDispatchResult(entityPtr, 0, cachedResult))
+            return cachedResult;
+
+        void* levelPtr = nullptr;
+        if ((!TryGetEntityLevel(entityPtr, levelPtr) || !LooksLikeLevelPtr(levelPtr)) &&
+            LooksLikeLevelPtr(s_currentLevel))
+        {
+            levelPtr = s_currentLevel;
+        }
+        bool isClientSide = false;
+        if (!TryGetLevelIsClientSide(levelPtr, isClientSide))
+            return 0;
+        if (isClientSide)
+            return 0;
+        int numericId = -1;
+        std::string encodeId;
+        const char* encodeIdPtr = nullptr;
+
+        if (TryGetEntityEncodeId(entityPtr, encodeId))
+            encodeIdPtr = encodeId.c_str();
+
+        if (!TryReadEntityNumericId(entityPtr, numericId))
+            numericId = -1;
+
+        if (!encodeIdPtr && numericId < 0)
+            return 0;
+
+        EntityLootNativeArgs args
+        {
+            numericId,
+            encodeIdPtr,
+            entityPtr,
+            wasKilledByPlayer ? 1 : 0,
+            playerBonusLevel
+        };
+
+        const int result = DotNetHost::CallEntityLoot(&args, static_cast<int>(sizeof(args)));
+        CacheLootDispatchResult(entityPtr, 0, result);
+        return result;
+    }
+
+    static bool ShouldSkipVanillaLoot(void* entityPtr, bool wasKilledByPlayer, int playerBonusLevel)
+    {
+        const int result = DispatchEntityLoot(entityPtr, wasKilledByPlayer, playerBonusLevel);
+        return result == 2;
+    }
+
+    static int DispatchEntityLootExplicit(void* entityPtr, const char* encodeId, bool wasKilledByPlayer, int playerBonusLevel)
+    {
+        if (!entityPtr || !encodeId || encodeId[0] == '\0')
+            return 0;
+        if (!LooksLikeEntityPtrStrict(entityPtr))
+            return 0;
+        int cachedResult = 0;
+        if (TryGetCachedLootDispatchResult(entityPtr, 1, cachedResult))
+            return cachedResult;
+
+        void* levelPtr = nullptr;
+        if ((!TryGetEntityLevel(entityPtr, levelPtr) || !LooksLikeLevelPtr(levelPtr)) &&
+            LooksLikeLevelPtr(s_currentLevel))
+        {
+            levelPtr = s_currentLevel;
+        }
+        bool isClientSide = false;
+        if (!TryGetLevelIsClientSide(levelPtr, isClientSide))
+            return 0;
+        if (isClientSide)
+            return 0;
+
+        EntityLootNativeArgs args
+        {
+            -1,
+            encodeId,
+            entityPtr,
+            wasKilledByPlayer ? 1 : 0,
+            playerBonusLevel
+        };
+
+        const int result = DotNetHost::CallEntityLoot(&args, static_cast<int>(sizeof(args)));
+        CacheLootDispatchResult(entityPtr, 1, result);
+        return result;
+    }
+
+    static bool ShouldSkipVanillaLootExplicit(void* entityPtr, const char* encodeId, bool wasKilledByPlayer, int playerBonusLevel)
+    {
+        const int result = DispatchEntityLootExplicit(entityPtr, encodeId, wasKilledByPlayer, playerBonusLevel);
+        return result == 2;
     }
 
     static void DispatchManagedBlockById(int blockId, void* level, int x, int y, int z, int eventKind, int neighborBlockId)
@@ -2579,6 +3430,80 @@ namespace GameHooks
             }
         }
     }
+
+#define DEFINE_ENTITY_LOOT_HOOK(name) \
+    void __fastcall Hooked_##name(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel) \
+    { \
+        const bool skipVanilla = ShouldSkipVanillaLoot(thisPtr, wasKilledByPlayer, playerBonusLevel); \
+        if (!skipVanilla && Original_##name) \
+            Original_##name(thisPtr, wasKilledByPlayer, playerBonusLevel); \
+    }
+
+    DEFINE_ENTITY_LOOT_HOOK(LivingEntityDropDeathLoot)
+
+    void __fastcall Hooked_MobDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel)
+    {
+        static int s_logCount = 0;
+        if (s_logCount < 20)
+        {
+            int numericId = -1;
+            std::string encodeId;
+            const bool hasNumeric = TryReadEntityNumericId(thisPtr, numericId);
+            const bool hasEncode = TryGetEntityEncodeId(thisPtr, encodeId);
+            LogUtil::Log("[WeaveLoader] LootHook Mob observed encode=%s numeric=%d",
+                         hasEncode ? encodeId.c_str() : "<empty>",
+                         hasNumeric ? numericId : -1);
+            s_logCount++;
+        }
+
+        const bool skipVanilla = ShouldSkipVanillaLoot(thisPtr, wasKilledByPlayer, playerBonusLevel);
+        if (!skipVanilla && Original_MobDropDeathLoot)
+            Original_MobDropDeathLoot(thisPtr, wasKilledByPlayer, playerBonusLevel);
+    }
+
+    void __fastcall Hooked_ChickenDropDeathLoot(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel)
+    {
+        const bool skipVanilla = ShouldSkipVanillaLootExplicit(thisPtr, "Chicken", wasKilledByPlayer, playerBonusLevel);
+        static int s_logCount = 0;
+        if (s_logCount < 5)
+        {
+            int id = -1;
+            TryReadEntityNumericId(thisPtr, id);
+            LogUtil::Log("[WeaveLoader] LootHook Chicken skipVanilla=%d entityId=%d", skipVanilla ? 1 : 0, id);
+            s_logCount++;
+        }
+        if (!skipVanilla && Original_ChickenDropDeathLoot)
+            Original_ChickenDropDeathLoot(thisPtr, wasKilledByPlayer, playerBonusLevel);
+    }
+
+#define DEFINE_ENTITY_LOOT_HOOK_KNOWN(name, encodeIdLiteral) \
+    void __fastcall Hooked_##name(void* thisPtr, bool wasKilledByPlayer, int playerBonusLevel) \
+    { \
+        const bool skipVanilla = ShouldSkipVanillaLootExplicit(thisPtr, encodeIdLiteral, wasKilledByPlayer, playerBonusLevel); \
+        if (!skipVanilla && Original_##name) \
+            Original_##name(thisPtr, wasKilledByPlayer, playerBonusLevel); \
+    }
+
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(CowDropDeathLoot, "Cow")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(PigDropDeathLoot, "Pig")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(SheepDropDeathLoot, "Sheep")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(SquidDropDeathLoot, "Squid")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(OcelotDropDeathLoot, "Ozelot")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(SnowManDropDeathLoot, "SnowMan")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(VillagerGolemDropDeathLoot, "VillagerGolem")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(PigZombieDropDeathLoot, "PigZombie")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(SpiderDropDeathLoot, "Spider")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(SkeletonDropDeathLoot, "Skeleton")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(WitchDropDeathLoot, "Witch")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(BlazeDropDeathLoot, "Blaze")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(EnderManDropDeathLoot, "EnderMan")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(GhastDropDeathLoot, "Ghast")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(LavaSlimeDropDeathLoot, "LavaSlime")
+    DEFINE_ENTITY_LOOT_HOOK_KNOWN(WitherBossDropDeathLoot, "WitherBoss")
+
+#undef DEFINE_ENTITY_LOOT_HOOK_KNOWN
+
+#undef DEFINE_ENTITY_LOOT_HOOK
 
     void __fastcall Hooked_TileStepOn(void* thisPtr, void* level, int x, int y, int z, void* entitySharedPtr)
     {
@@ -2997,9 +3922,26 @@ namespace GameHooks
 
     int __fastcall Hooked_TileGetResource(void* thisPtr, int data, void* random, int playerBonusLevel)
     {
-        const ManagedBlockRegistry::Definition* def = ManagedBlockRegistry::Find(TryReadTileId(thisPtr));
+        const int tileId = TryReadTileId(thisPtr);
+        const ManagedBlockRegistry::Definition* def = ManagedBlockRegistry::Find(tileId);
         if (def && def->dropBlockId >= 0)
             return def->dropBlockId;
+
+        struct BlockLootNativeArgs
+        {
+            int blockNumericId;
+            int blockData;
+            int playerBonusLevel;
+        };
+
+        if (tileId >= 0)
+        {
+            const BlockLootNativeArgs args{ tileId, data, playerBonusLevel };
+            const int managedDropId = DotNetHost::CallBlockLoot(&args, static_cast<int>(sizeof(args)));
+            if (managedDropId >= 0)
+                return managedDropId;
+        }
+
         return Original_TileGetResource ? Original_TileGetResource(thisPtr, data, random, playerBonusLevel) : 0;
     }
 
@@ -4438,6 +5380,14 @@ namespace GameHooks
             return Original_GetResourceAsStream(&modAssetPath);
         }
 
+        std::wstring modDataPath;
+        if (TryResolveModDataPath(*path, modDataPath))
+        {
+            LogUtil::Log("[WeaveLoader] getResourceAsStream: redirecting %ls -> %ls",
+                         path->c_str(), modDataPath.c_str());
+            return Original_GetResourceAsStream(&modDataPath);
+        }
+
         return Original_GetResourceAsStream(fileName);
     }
 
@@ -4478,15 +5428,13 @@ namespace GameHooks
         DotNetHost::CallInit();
         s_initCalled = true;
 
-        // Inject mod strings directly into the game's StringTable vector.
-        // This is necessary because the compiler inlines GetString at call
-        // sites like Item::getHoverName, bypassing our GetString hook.
-        ModStrings::InjectAllIntoGameTable();
+        // Inject mod strings later when the StringTable is stable.
     }
 
     void __fastcall Hooked_MinecraftTick(void* thisPtr, bool bFirst, bool bUpdateTextures)
     {
         s_tickCounter.fetch_add(1, std::memory_order_relaxed);
+        TryInjectModStrings();
         ModAtlas::PollAsyncBuild();
         CullSpawnedEntitiesBelowWorld();
         Original_MinecraftTick(thisPtr, bFirst, bUpdateTextures);
@@ -4564,7 +5512,6 @@ namespace GameHooks
             LogUtil::Log("[WeaveLoader] Hook: Minecraft::init -- late Init fallback");
             DotNetHost::CallInit();
             s_initCalled = true;
-            ModStrings::InjectAllIntoGameTable();
         }
 
         if (!s_postInitCalled)
@@ -4573,6 +5520,7 @@ namespace GameHooks
             DotNetHost::CallPostInit();
             s_postInitCalled = true;
         }
+
     }
 
     void __fastcall Hooked_ExitGame(void* thisPtr)

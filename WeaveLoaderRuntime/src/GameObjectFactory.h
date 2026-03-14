@@ -41,4 +41,5 @@ namespace GameObjectFactory
     bool CreateSwordItem(int itemId, int tier, int maxDamage,
                          const wchar_t* iconName, int descriptionId = -1);
     void* FindItem(int itemId);
+    bool IsRuntimeItemValid(int itemId);
 }

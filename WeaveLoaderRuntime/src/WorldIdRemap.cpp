@@ -70,8 +70,24 @@ namespace
     LevelChunkGetHighestNonEmptyY_fn s_levelChunkGetHighestNonEmptyY = nullptr;
     CompressedTileStorageSet_fn s_compressedTileStorageSet = nullptr;
 
-    // LevelChunk layout: vtable(8) + byteArray(16) = 24, then lowerBlocks at 24, upperBlocks at 32
+    struct ByteArrayLayout
+    {
+        unsigned char* data;
+        unsigned int length;
+    };
+
+    // LevelChunk layout:
+    // lowerBlocks at 24, upperBlocks at 32, heightmap at 488, minHeight at 504, x at 508, z at 512.
     static constexpr size_t kLevelChunkLowerBlocksOffset = 24;
+    static constexpr size_t kLevelChunkHeightmapOffset = 488;
+    static constexpr size_t kLevelChunkMinHeightOffset = 504;
+    static constexpr size_t kLevelChunkXOffset = 508;
+    static constexpr size_t kLevelChunkZOffset = 512;
+    static constexpr uint32_t kBlockIndexV2Flag = 0x80000000u;
+    static constexpr uint32_t kBlockIndexV2YShift = 8u;
+    static constexpr uint32_t kBlockIndexV2YBits = 23u;
+    static constexpr uint32_t kBlockIndexV2YMask = (1u << kBlockIndexV2YBits) - 1u;
+    static constexpr int kBlockIndexV2YBias = 1 << (kBlockIndexV2YBits - 1u);
     bool s_missingPlaceholdersReady = false;
     int s_chunkRemapLogCount = 0;
     int s_chunkSaveLogCount = 0;
@@ -198,7 +214,7 @@ namespace
         }
         const auto* entry = reinterpret_cast<const RuntimeFileEntryLayout*>(fileEntry);
         const unsigned int fileSize = entry->length;
-        // Hard cap for corrupted metadata; chunk namespace files should stay tiny.
+        // Hard cap for corrupted files; chunk namespace files should stay tiny.
         if (fileSize > (1024u * 1024u))
         {
             save->closeHandle(fileEntry);
@@ -242,6 +258,9 @@ namespace
         return ok && bytesWritten == text.size();
     }
 
+    static int MakeBlockIndex(int x, int y, int z);
+    static void DecodeBlockIndex(int index, int* x, int* y, int* z);
+
     static bool WriteChunkNamespaceMap(
         void* saveFile,
         const std::wstring& path,
@@ -263,11 +282,21 @@ namespace
         std::istringstream input(text);
         std::string line;
         int expectedEntries = -1;
+        int formatVersion = 1;
         int parsedEntries = 0;
         while (std::getline(input, line))
         {
             if (line.empty())
                 continue;
+
+            if (line.rfind("#format ", 0) == 0)
+            {
+                std::istringstream fs(line.substr(8));
+                int fmt = 1;
+                if (fs >> fmt && fmt > 0)
+                    formatVersion = fmt;
+                continue;
+            }
 
             if (expectedEntries < 0 && line.rfind("#count ", 0) == 0)
             {
@@ -278,17 +307,37 @@ namespace
                 continue;
             }
 
-            std::istringstream ss(line);
-            int blockIndex = -1;
-            std::string namespacedId;
-            if (!(ss >> blockIndex >> namespacedId))
-                continue;
-            if (blockIndex < 0 || namespacedId.empty())
-                continue;
-            (*outMap)[blockIndex] = namespacedId;
-            ++parsedEntries;
-            if (expectedEntries >= 0 && parsedEntries >= expectedEntries)
-                break;
+            if (formatVersion >= 2)
+            {
+                std::istringstream ss(line);
+                int x = 0;
+                int y = 0;
+                int z = 0;
+                std::string namespacedId;
+                if (!(ss >> x >> y >> z >> namespacedId))
+                    continue;
+                if (x < 0 || x >= kChunkWidth || z < 0 || z >= kChunkWidth || namespacedId.empty())
+                    continue;
+                const int blockIndex = MakeBlockIndex(x, y, z);
+                (*outMap)[blockIndex] = namespacedId;
+                ++parsedEntries;
+                if (expectedEntries >= 0 && parsedEntries >= expectedEntries)
+                    break;
+            }
+            else
+            {
+                std::istringstream ss(line);
+                int blockIndex = -1;
+                std::string namespacedId;
+                if (!(ss >> blockIndex >> namespacedId))
+                    continue;
+                if (blockIndex < 0 || namespacedId.empty())
+                    continue;
+                (*outMap)[blockIndex] = namespacedId;
+                ++parsedEntries;
+                if (expectedEntries >= 0 && parsedEntries >= expectedEntries)
+                    break;
+            }
         }
         if (expectedEntries < 0)
         {
@@ -336,22 +385,73 @@ namespace
         const std::unordered_map<int, std::string>& map)
     {
         std::ostringstream out;
-        out << "#count " << map.size() << '\n';
+        bool useFormatV2 = false;
         for (const auto& entry : map)
-            out << entry.first << ' ' << entry.second << '\n';
+        {
+            const uint32_t u = static_cast<uint32_t>(entry.first);
+            if ((u & kBlockIndexV2Flag) != 0)
+            {
+                useFormatV2 = true;
+                break;
+            }
+        }
+
+        if (useFormatV2)
+            out << "#format 2\n";
+        out << "#count " << map.size() << '\n';
+        if (useFormatV2)
+        {
+            for (const auto& entry : map)
+            {
+                int x = 0;
+                int y = 0;
+                int z = 0;
+                DecodeBlockIndex(entry.first, &x, &y, &z);
+                out << x << ' ' << y << ' ' << z << ' ' << entry.second << '\n';
+            }
+        }
+        else
+        {
+            for (const auto& entry : map)
+                out << entry.first << ' ' << entry.second << '\n';
+        }
         return SaveWriteAllText(saveFile, path, out.str());
     }
 
     static int MakeBlockIndex(int x, int y, int z)
     {
-        return ((y & 0xFF) << 8) | ((z & 0x0F) << 4) | (x & 0x0F);
+        if (y >= 0 && y <= 0xFF)
+            return ((y & 0xFF) << 8) | ((z & 0x0F) << 4) | (x & 0x0F);
+
+        int packedY = y + kBlockIndexV2YBias;
+        if (packedY < 0)
+            packedY = 0;
+        if (packedY > static_cast<int>(kBlockIndexV2YMask))
+            packedY = static_cast<int>(kBlockIndexV2YMask);
+        const uint32_t u = kBlockIndexV2Flag
+            | ((static_cast<uint32_t>(packedY) & kBlockIndexV2YMask) << kBlockIndexV2YShift)
+            | ((static_cast<uint32_t>(z) & 0x0Fu) << 4u)
+            | (static_cast<uint32_t>(x) & 0x0Fu);
+        return static_cast<int>(u);
     }
 
     static void DecodeBlockIndex(int index, int* x, int* y, int* z)
     {
-        if (x) *x = index & 0x0F;
-        if (z) *z = (index >> 4) & 0x0F;
-        if (y) *y = (index >> 8) & 0xFF;
+        const uint32_t u = static_cast<uint32_t>(index);
+        if (x) *x = static_cast<int>(u & 0x0F);
+        if (z) *z = static_cast<int>((u >> 4u) & 0x0F);
+        if (y)
+        {
+            if ((u & kBlockIndexV2Flag) != 0)
+            {
+                const int packedY = static_cast<int>((u >> kBlockIndexV2YShift) & kBlockIndexV2YMask);
+                *y = packedY - kBlockIndexV2YBias;
+            }
+            else
+            {
+                *y = static_cast<int>((u >> 8u) & 0xFF);
+            }
+        }
     }
 
     static bool TryGetChunkMeta(void* chunkPtr, ChunkMeta* outMeta)
@@ -399,14 +499,69 @@ namespace
 
     static bool TryResolveChunkCoords(void* levelChunkPtr, int* outX, int* outZ)
     {
-        if (!levelChunkPtr || !s_levelChunkGetPos)
+        if (!levelChunkPtr)
             return false;
-        void* posPtr = s_levelChunkGetPos(levelChunkPtr);
-        if (!posPtr || !IsReadableRange(posPtr, sizeof(ChunkPosLayout)))
+
+        if (s_levelChunkGetPos)
+        {
+            void* posPtr = s_levelChunkGetPos(levelChunkPtr);
+            if (posPtr && IsReadableRange(posPtr, sizeof(ChunkPosLayout)))
+            {
+                const auto* pos = reinterpret_cast<const ChunkPosLayout*>(posPtr);
+                if (outX) *outX = pos->x;
+                if (outZ) *outZ = pos->z;
+                return true;
+            }
+        }
+
+        if (!IsReadableRange(levelChunkPtr, kLevelChunkZOffset + sizeof(int)))
             return false;
-        const auto* pos = reinterpret_cast<const ChunkPosLayout*>(posPtr);
-        if (outX) *outX = pos->x;
-        if (outZ) *outZ = pos->z;
+        const int x = *reinterpret_cast<const int*>(static_cast<const char*>(levelChunkPtr) + kLevelChunkXOffset);
+        const int z = *reinterpret_cast<const int*>(static_cast<const char*>(levelChunkPtr) + kLevelChunkZOffset);
+        if (outX) *outX = x;
+        if (outZ) *outZ = z;
+        return true;
+    }
+
+    static bool TryGetChunkMinHeight(void* levelChunkPtr, int* outMinY)
+    {
+        if (!levelChunkPtr || !outMinY)
+            return false;
+        if (!IsReadableRange(levelChunkPtr, kLevelChunkMinHeightOffset + sizeof(int)))
+            return false;
+        const int minY = *reinterpret_cast<const int*>(static_cast<const char*>(levelChunkPtr) + kLevelChunkMinHeightOffset);
+        *outMinY = minY;
+        return true;
+    }
+
+    static bool TryGetChunkHeightmapMax(void* levelChunkPtr, int* outMaxY)
+    {
+        if (!levelChunkPtr)
+            return false;
+        if (!IsReadableRange(levelChunkPtr, kLevelChunkHeightmapOffset + sizeof(ByteArrayLayout)))
+            return false;
+
+        const auto* heightmap = reinterpret_cast<const ByteArrayLayout*>(
+            static_cast<const char*>(levelChunkPtr) + kLevelChunkHeightmapOffset);
+        if (!heightmap->data || heightmap->length == 0)
+            return false;
+        if (!IsReadableRange(heightmap->data, heightmap->length))
+            return false;
+
+        int maxY = -1;
+        for (unsigned int i = 0; i < heightmap->length; ++i)
+        {
+            const int value = static_cast<int>(heightmap->data[i]);
+            if (value > maxY)
+                maxY = value;
+        }
+        if (maxY < 0)
+            return false;
+        int minY = 0;
+        if (TryGetChunkMinHeight(levelChunkPtr, &minY) && minY != 0 && maxY < minY)
+            maxY += minY;
+        if (outMaxY)
+            *outMaxY = maxY;
         return true;
     }
 
@@ -789,7 +944,9 @@ namespace WorldIdRemap
             SetLoadedChunkNamespaces(levelChunkPtr, entries);
 
         const int sanitizeFallbackId = ResolveSafeMissingBlockFallbackId();
-        int applyMaxY = 127;
+        int minY = 0;
+        TryGetChunkMinHeight(levelChunkPtr, &minY);
+        int applyMaxY = kChunkMaxY - 1;
         if (s_levelChunkGetHighestNonEmptyY)
         {
             const int highestY = s_levelChunkGetHighestNonEmptyY(levelChunkPtr);
@@ -802,12 +959,23 @@ namespace WorldIdRemap
             }
             else if (highestY >= 0)
             {
-                applyMaxY = kChunkMaxY - 1;
+                applyMaxY = highestY;
             }
         }
-
-        if (applyMaxY > 127)
-            applyMaxY = 127;
+        else
+        {
+            int highestY = -1;
+            if (TryGetChunkHeightmapMax(levelChunkPtr, &highestY))
+            {
+                int bound = highestY + 16;
+                if (bound >= kChunkMaxY)
+                    bound = kChunkMaxY - 1;
+                if (bound >= 0)
+                    applyMaxY = bound;
+            }
+        }
+        if (applyMaxY < minY)
+            applyMaxY = minY;
 
         int changed = 0;
         int skippedInvalid = 0;
@@ -819,7 +987,7 @@ namespace WorldIdRemap
             int y = 0;
             int z = 0;
             DecodeBlockIndex(entry.first, &x, &y, &z);
-            if (y < 0 || y > applyMaxY)
+            if (y < minY || y > applyMaxY)
             {
                 ++skippedInvalid;
                 continue;
@@ -926,6 +1094,8 @@ namespace WorldIdRemap
 
         std::unordered_map<int, std::string> nextEntries;
         const int missingBlockFallback = IdRegistry::Instance().GetMissingFallback(IdRegistry::Type::Block);
+        int minY = 0;
+        TryGetChunkMinHeight(levelChunkPtr, &minY);
         int maxY = kChunkMaxY - 1;
         if (s_levelChunkGetHighestNonEmptyY)
         {
@@ -934,9 +1104,19 @@ namespace WorldIdRemap
                 return;
             if (highestY >= 0 && highestY < kChunkMaxY)
                 maxY = highestY;
+            else if (highestY >= 0)
+                maxY = highestY;
         }
+        else
+        {
+            int highestY = -1;
+            if (TryGetChunkHeightmapMax(levelChunkPtr, &highestY))
+                maxY = highestY;
+        }
+        if (maxY < minY)
+            maxY = minY;
 
-        for (int y = 0; y <= maxY; ++y)
+        for (int y = minY; y <= maxY; ++y)
         {
             for (int z = 0; z < kChunkWidth; ++z)
             {

@@ -66,6 +66,7 @@ static StoneSlabItemCtor_fn fnStoneSlabItemCtor = nullptr;
 static ItemSetIconName_fn fnItemSetIconName= nullptr;
 static ItemSetUseDescriptionId_fn fnItemSetUseDescriptionId = nullptr;
 static int s_itemDescIdOffset = -1; // offset of descriptionId field in Item, extracted from getDescriptionId
+static void* s_itemArrayObject = nullptr;
 
 // Store ADDRESSES of Material*/SoundType* statics so we can dereference lazily
 // (they're NULL at resolve time because staticCtor hasn't run yet).
@@ -116,6 +117,14 @@ static const void* GetTier(int idx)
 
 namespace GameObjectFactory
 {
+namespace
+{
+    struct ArrayWithLengthRaw
+    {
+        void** data;
+        unsigned int length;
+    };
+}
 
 bool ResolveSymbols(SymbolResolver& resolver)
 {
@@ -160,6 +169,7 @@ bool ResolveSymbols(SymbolResolver& resolver)
         "?setIconName@Item@@QEAAPEAV1@AEBV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
     fnItemSetUseDescriptionId = (ItemSetUseDescriptionId_fn)resolver.Resolve(
         "?setUseDescriptionId@Item@@QEAAPEAV1@I@Z");
+    s_itemArrayObject = resolver.ResolveOptional("?items@Item@@2V?$arrayWithLength@PEAVItem@@@@A");
     // Item::setDescriptionId is inlined — extract the field offset from getDescriptionId instead.
     // getDescriptionId(int) is "mov eax, [rcx+offset]; ret" so we parse the offset from its opcodes.
     void* fnItemGetDescId = resolver.Resolve("?getDescriptionId@Item@@UEAAIH@Z");
@@ -257,6 +267,7 @@ bool ResolveSymbols(SymbolResolver& resolver)
     logSym("StoneSlabTileItem::StoneSlabTileItem", (void*)fnStoneSlabItemCtor);
     logSym("Item::setIconName",  (void*)fnItemSetIconName);
     logSym("Item::setUseDescriptionId", (void*)fnItemSetUseDescriptionId);
+    logSym("Item::items", s_itemArrayObject);
     logSym("Material::stone addr", (void*)s_materialAddrs[1]);
     logSym("SOUND_STONE addr",     (void*)s_soundAddrs[1]);
 
@@ -633,6 +644,24 @@ void* FindItem(int itemId)
     if (it == s_createdItems.end())
         return nullptr;
     return it->second;
+}
+
+bool IsRuntimeItemValid(int itemId)
+{
+    if (itemId < 0 || itemId >= 32000)
+        return false;
+
+    if (s_itemArrayObject)
+    {
+        const auto* items = reinterpret_cast<const ArrayWithLengthRaw*>(s_itemArrayObject);
+        if (items->data && itemId < static_cast<int>(items->length))
+            return items->data[itemId] != nullptr;
+    }
+
+    if (itemId >= 3000)
+        return FindItem(itemId) != nullptr;
+
+    return true;
 }
 
 } // namespace GameObjectFactory

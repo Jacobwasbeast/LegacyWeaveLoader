@@ -42,6 +42,8 @@ static managed_entry_fn fn_BlockDestroyed = nullptr;
 static managed_entry_fn fn_BlockPlayerDestroy = nullptr;
 static managed_entry_fn fn_BlockPlayerWillDestroy = nullptr;
 static managed_entry_fn fn_BlockPlacedBy = nullptr;
+static managed_entry_fn fn_BlockLoot = nullptr;
+static managed_entry_fn fn_EntityLoot = nullptr;
 static managed_entry_fn fn_EntitySummoned = nullptr;
 
 static bool LoadHostfxr()
@@ -218,7 +220,9 @@ bool DotNetHost::Initialize()
     ok &= resolve(L"OnBlockPlayerDestroy", &fn_BlockPlayerDestroy);
     ok &= resolve(L"OnBlockPlayerWillDestroy", &fn_BlockPlayerWillDestroy);
     ok &= resolve(L"OnBlockPlacedBy", &fn_BlockPlacedBy);
+    ok &= resolve(L"OnEntityLoot", &fn_EntityLoot);
     ok &= resolve(L"OnEntitySummoned", &fn_EntitySummoned);
+    resolve(L"OnBlockLoot", &fn_BlockLoot);
 
     if (!ok)
     {
@@ -407,6 +411,20 @@ int DotNetHost::CallBlockPlacedBy(const void* args, int sizeBytes)
     if (!fn_BlockPlacedBy || !args || sizeBytes <= 0)
         return 0;
     return fn_BlockPlacedBy(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallBlockLoot(const void* args, int sizeBytes)
+{
+    if (!fn_BlockLoot || !args || sizeBytes <= 0)
+        return -1;
+    return fn_BlockLoot(const_cast<void*>(args), sizeBytes);
+}
+
+int DotNetHost::CallEntityLoot(const void* args, int sizeBytes)
+{
+    if (!fn_EntityLoot || !args || sizeBytes <= 0)
+        return 0;
+    return fn_EntityLoot(const_cast<void*>(args), sizeBytes);
 }
 
 

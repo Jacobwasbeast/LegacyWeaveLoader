@@ -204,6 +204,7 @@ extern "C"
     __declspec(dllexport) int native_spawn_entity_from_player_look(void* playerPtr, void* playerSharedPtr, int numericEntityId, double speed, double spawnForward, double spawnUp);
     __declspec(dllexport) int native_summon_entity(const char* namespacedId, double x, double y, double z);
     __declspec(dllexport) int native_summon_entity_by_id(int numericEntityId, double x, double y, double z);
+    __declspec(dllexport) int native_spawn_item_from_entity(void* entityPtr, int numericItemId, int count, int aux);
     __declspec(dllexport) int native_level_has_neighbor_signal(void* levelPtr, int x, int y, int z);
     __declspec(dllexport) int native_level_set_tile(void* levelPtr, int x, int y, int z, int blockId, int data, int flags);
     __declspec(dllexport) int native_level_schedule_tick(void* levelPtr, int x, int y, int z, int blockId, int delay);

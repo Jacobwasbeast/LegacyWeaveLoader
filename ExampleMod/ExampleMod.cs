@@ -2,6 +2,7 @@ using WeaveLoader.API;
 using WeaveLoader.API.Block;
 using WeaveLoader.API.Item;
 using WeaveLoader.API.Events;
+using WeaveLoader.API.Loot;
 
 namespace ExampleMod;
 
@@ -11,6 +12,7 @@ public class ExampleMod : IMod
 {
     private static nint s_currentLevel;
     private static bool s_hasLevel;
+    private static bool s_loggedCreeperLootInjection;
     public static RegisteredBlock? RubyOre;
     public static RegisteredBlock? RubyStone;
     public static RegisteredBlock? RubyWoodPlanks;
@@ -560,6 +562,29 @@ public class ExampleMod : IMod
                 .Model("examplemod:item/ruby_wand")
                 .Name(Text.Translatable("item.examplemod.ruby_wand"))
                 .InCreativeTab(CreativeTab.ToolsAndWeapons));
+
+        LootTableEvents.MODIFY.Register((_, _, tableId, tableBuilder, _) =>
+        {
+            if (!tableId.Namespace.Equals("minecraft", StringComparison.OrdinalIgnoreCase) ||
+                !tableId.Path.Equals("entities/creeper", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var pool = LootPool.builder()
+                .rolls(ConstantLootNumberProvider.create(1))
+                .conditionally(RandomChanceLootCondition.builder(0.05f))
+                .with(ItemEntry.builder(new Identifier("examplemod:ruby_sand"))
+                    .apply(new SetCountLootFunction(1)));
+
+            tableBuilder.pool(pool);
+
+            if (!s_loggedCreeperLootInjection)
+            {
+                s_loggedCreeperLootInjection = true;
+                Logger.Info("ExampleMod: injected creeper loot pool (ruby_sand)");
+            }
+        });
 
         Registry.Recipe.AddFurnace("examplemod:ruby_ore", "examplemod:ruby", 1.0f);
 

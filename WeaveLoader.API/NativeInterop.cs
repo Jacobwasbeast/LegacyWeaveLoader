@@ -227,6 +227,9 @@ internal static class NativeInterop
     internal static extern int native_summon_entity_by_id(int numericEntityId, double x, double y, double z);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int native_spawn_item_from_entity(nint entityPtr, int numericItemId, int count, int aux);
+
+    [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]
     internal static extern int native_consume_item_from_player(nint playerPtr, int numericItemId, int count);
 
     [DllImport(RuntimeDll, CallingConvention = CallingConvention.Cdecl)]

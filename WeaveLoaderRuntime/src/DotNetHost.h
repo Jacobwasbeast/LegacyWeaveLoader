@@ -35,5 +35,7 @@ namespace DotNetHost
     int  CallBlockPlayerDestroy(const void* args, int sizeBytes);
     int  CallBlockPlayerWillDestroy(const void* args, int sizeBytes);
     int  CallBlockPlacedBy(const void* args, int sizeBytes);
+    int  CallBlockLoot(const void* args, int sizeBytes);
+    int  CallEntityLoot(const void* args, int sizeBytes);
     void CallEntitySummoned(int entityNumericId, float x, float y, float z);
 }

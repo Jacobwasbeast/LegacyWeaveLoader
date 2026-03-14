@@ -115,6 +115,28 @@ void* SymbolResolver::ResolveExact(const char* exactName)
     return reinterpret_cast<void*>(m_moduleBase + rva);
 }
 
+void* SymbolResolver::ResolveOptional(const char* decoratedName)
+{
+    if (!m_initialized) return nullptr;
+
+    uint32_t rva = PdbParser::FindSymbolRVA(decoratedName);
+    if (rva == 0)
+        return nullptr;
+
+    return reinterpret_cast<void*>(m_moduleBase + rva);
+}
+
+void* SymbolResolver::ResolveExactOptional(const char* exactName)
+{
+    if (!m_initialized) return nullptr;
+
+    uint32_t rva = PdbParser::FindSymbolRVAByName(exactName);
+    if (rva == 0)
+        return nullptr;
+
+    return reinterpret_cast<void*>(m_moduleBase + rva);
+}
+
 bool SymbolResolver::IsStub(void* ptr) const
 {
     return ptr == reinterpret_cast<void*>(m_moduleBase + 0x31000u);

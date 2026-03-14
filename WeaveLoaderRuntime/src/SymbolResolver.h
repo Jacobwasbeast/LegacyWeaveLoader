@@ -11,6 +11,8 @@ public:
 
     void* Resolve(const char* decoratedName);
     void* ResolveExact(const char* exactName);
+    void* ResolveOptional(const char* decoratedName);
+    void* ResolveExactOptional(const char* exactName);
     bool IsStub(void* ptr) const;
 
     CoreSymbols Core;

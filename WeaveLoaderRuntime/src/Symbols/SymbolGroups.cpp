@@ -14,6 +14,12 @@ namespace
             LogUtil::Log("[WeaveLoader] MISSING: %s", name);
     }
 
+    static void LogSymOptional(const char* name, void* ptr)
+    {
+        if (ptr)
+            LogUtil::Log("[WeaveLoader] %-25s @ %p", name, ptr);
+    }
+
     static const char* SYM_RUN_STATIC_CTORS = "?MinecraftWorld_RunStaticCtors@@YAXXZ";
     static const char* SYM_MINECRAFT_TICK = "?tick@Minecraft@@QEAAX_N0@Z";
     static const char* SYM_MINECRAFT_INIT = "?init@Minecraft@@QEAAXXZ";
@@ -71,16 +77,28 @@ namespace
     static const char* SYM_ITEMINSTANCE_ONCRAFTEDBY = "?onCraftedBy@ItemInstance@@QEAAXPEAVLevel@@V?$shared_ptr@VPlayer@@@std@@H@Z";
     static const char* SYM_ITEMINSTANCE_INTERACTENEMY = "?interactEnemy@ItemInstance@@QEAA_NV?$shared_ptr@VPlayer@@@std@@V?$shared_ptr@VLivingEntity@@@3@@Z";
     static const char* SYM_ITEMINSTANCE_HURTENEMY = "?hurtEnemy@ItemInstance@@QEAAXV?$shared_ptr@VLivingEntity@@@std@@V?$shared_ptr@VPlayer@@@3@@Z";
+    // Not present in this build's mapping.json/PDB. Keep null so we don't spam missing-symbol logs.
+    static const char* SYM_ITEMINSTANCE_SETAUXVALUE = nullptr;
+    static const char* SYM_ITEMINSTANCE_SHAREDPTR_DTOR = "??1?$shared_ptr@VItemInstance@@@std@@QEAA@XZ";
+    static const char* SYM_ITEMENTITY_SHAREDPTR_DTOR = "??1?$shared_ptr@VItemEntity@@@std@@QEAA@XZ";
+    static const char* SYM_ITEMENTITY_SETITEM = "?setItem@ItemEntity@@QEAAXV?$shared_ptr@VItemInstance@@@std@@@Z";
+    static const char* SYM_ITEMINSTANCE_CTOR_INT = "??0ItemInstance@@QEAA@HHH@Z";
+    static const char* SYM_ITEMINSTANCE_SHAREDPTR_CTOR = "??$?0VItemInstance@@$0A@@?$shared_ptr@VItemInstance@@@std@@QEAA@PEAVItemInstance@@@Z";
+    static const char* SYM_ENTITY_SHAREDPTR_CTOR = "??$?0VEntity@@$0A@@?$shared_ptr@VEntity@@@std@@QEAA@PEAVEntity@@@Z";
+    static const char* SYM_ENTITY_SHAREDPTR_DTOR = "??1?$shared_ptr@VEntity@@@std@@QEAA@XZ";
     static const char* SYM_ITEM_MINEBLOCK = "?mineBlock@Item@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
     static const char* SYM_DIGGERITEM_MINEBLOCK = "?mineBlock@DiggerItem@@UEAA_NV?$shared_ptr@VItemInstance@@@std@@PEAVLevel@@HHHHV?$shared_ptr@VLivingEntity@@@3@@Z";
     static const char* SYM_PICKAXEITEM_GETDESTROYSPEED = "?getDestroySpeed@PickaxeItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
     static const char* SYM_PICKAXEITEM_CANDESTROYSPECIAL = "?canDestroySpecial@PickaxeItem@@UEAA_NPEAVTile@@@Z";
-    static const char* SYM_SHOVELITEM_GETDESTROYSPEED = "?getDestroySpeed@ShovelItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
+    static const char* SYM_SHOVELITEM_GETDESTROYSPEED = "?getDestroySpeed@DiggerItem@@UEAAMV?$shared_ptr@VItemInstance@@@std@@PEAVTile@@@Z";
     static const char* SYM_SHOVELITEM_CANDESTROYSPECIAL = "?canDestroySpecial@ShovelItem@@UEAA_NPEAVTile@@@Z";
     static const char* SYM_ITEMENTITY_GETITEM = "?getItem@ItemEntity@@QEAA?AV?$shared_ptr@VItemInstance@@@std@@XZ";
+    static const char* SYM_ITEMENTITY_CTOR_WITH_ITEM = "??0ItemEntity@@QEAA@PEAVLevel@@NNNV?$shared_ptr@VItemInstance@@@std@@@Z";
+    static const char* SYM_ITEMENTITY_MAKE_SHARED = "??$make_shared@VItemEntity@@AEAPEAVLevel@@AEANNAEANAEAV?$shared_ptr@VItemInstance@@@std@@@std@@YA?AV?$shared_ptr@VItemEntity@@@0@AEAPEAVLevel@@AEAN$$QEAN1AEAV?$shared_ptr@VItemInstance@@@0@@Z";
     static const char* SYM_ITEMRENDERER_RENDERGUIITEM = "?renderGuiItem@ItemRenderer@@QEAAXPEAVFont@@PEAVTextures@@V?$shared_ptr@VItemInstance@@@std@@MMMMM_N@Z";
     static const char* SYM_ITEMINHANDRENDERER_RENDER = "?render@ItemInHandRenderer@@QEAAXM@Z";
     static const char* SYM_ITEMINHANDRENDERER_RENDERITEM = "?renderItem@ItemInHandRenderer@@QEAAXV?$shared_ptr@VLivingEntity@@@std@@V?$shared_ptr@VItemInstance@@@3@H_N@Z";
+    static const char* SYM_ENTITY_SPAWNATLOCATION_INT = nullptr;
 
     static const char* SYM_TILE_ONPLACE = "?onPlace@Tile@@UEAAXPEAVLevel@@HHH@Z";
     static const char* SYM_TILE_NEIGHBORCHANGED = "?neighborChanged@Tile@@UEAAXPEAVLevel@@HHHH@Z";
@@ -158,10 +176,34 @@ namespace
     static const char* SYM_LIVINGENTITY_GETLOOKANGLE = "?getLookAngle@LivingEntity@@UEAAPEAVVec3@@XZ";
     static const char* SYM_ENTITY_GETLOOKANGLE = "?getLookAngle@Entity@@UEAAPEAVVec3@@XZ";
     static const char* SYM_LIVINGENTITY_GETVIEWVECTOR = "?getViewVector@LivingEntity@@UEAAPEAVVec3@@M@Z";
-    static const char* SYM_LIVINGENTITY_GETPOS = "?getPos@LivingEntity@@QEAAPEAVVec3@@M@Z";
+    static const char* SYM_LIVINGENTITY_GETPOS = "?getPos@LivingEntity@@UEAAPEAVVec3@@M@Z";
     static const char* SYM_LIVINGENTITY_GETPOS_V = "?getPos@LivingEntity@@UEAAPEAVVec3@@M@Z";
     static const char* SYM_LIVINGENTITY_PICK = "?pick@LivingEntity@@UEAAPEAVHitResult@@NM@Z";
     static const char* SYM_ENTITY_LERPMOTION = "?lerpMotion@Entity@@UEAAXNNN@Z";
+    static const char* SYM_ENTITY_SPAWNATLOCATION = "?spawnAtLocation@Entity@@QEAA?AV?$shared_ptr@VItemEntity@@@std@@V?$shared_ptr@VItemInstance@@@3@M@Z";
+    static const char* SYM_ENTITY_GETENCODEID = "?getEncodeId@EntityIO@@SA?AV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@V?$shared_ptr@VEntity@@@3@@Z";
+    static const char* SYM_ENTITY_GETENCODEID_BYID = "?getEncodeId@EntityIO@@SA?AV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@H@Z";
+    static const char* SYM_ENTITY_GETNETWORKNAME = "?getNetworkName@Entity@@UEAA?AV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@XZ";
+    static const char* SYM_LIVINGENTITY_TICKDEATH = "?tickDeath@LivingEntity@@MEAAXXZ";
+    static const char* SYM_LIVINGENTITY_DROPDEATHLOOT = "?dropDeathLoot@LivingEntity@@MEAAX_NH@Z";
+    static const char* SYM_MOB_DROPDEATHLOOT = "?dropDeathLoot@Mob@@MEAAX_NH@Z";
+    static const char* SYM_CHICKEN_DROPDEATHLOOT = "?dropDeathLoot@Chicken@@MEAAX_NH@Z";
+    static const char* SYM_COW_DROPDEATHLOOT = "?dropDeathLoot@Cow@@MEAAX_NH@Z";
+    static const char* SYM_PIG_DROPDEATHLOOT = "?dropDeathLoot@Pig@@MEAAX_NH@Z";
+    static const char* SYM_SHEEP_DROPDEATHLOOT = "?dropDeathLoot@Sheep@@UEAAX_NH@Z";
+    static const char* SYM_SQUID_DROPDEATHLOOT = "?dropDeathLoot@Squid@@MEAAX_NH@Z";
+    static const char* SYM_OCELOT_DROPDEATHLOOT = "?dropDeathLoot@Ocelot@@MEAAX_NH@Z";
+    static const char* SYM_SNOWMAN_DROPDEATHLOOT = "?dropDeathLoot@SnowMan@@MEAAX_NH@Z";
+    static const char* SYM_VILLAGERGOLEM_DROPDEATHLOOT = "?dropDeathLoot@VillagerGolem@@MEAAX_NH@Z";
+    static const char* SYM_PIGZOMBIE_DROPDEATHLOOT = "?dropDeathLoot@PigZombie@@MEAAX_NH@Z";
+    static const char* SYM_SPIDER_DROPDEATHLOOT = "?dropDeathLoot@Spider@@MEAAX_NH@Z";
+    static const char* SYM_SKELETON_DROPDEATHLOOT = "?dropDeathLoot@Skeleton@@MEAAX_NH@Z";
+    static const char* SYM_WITCH_DROPDEATHLOOT = "?dropDeathLoot@Witch@@MEAAX_NH@Z";
+    static const char* SYM_BLAZE_DROPDEATHLOOT = "?dropDeathLoot@Blaze@@MEAAX_NH@Z";
+    static const char* SYM_ENDERMAN_DROPDEATHLOOT = "?dropDeathLoot@EnderMan@@MEAAX_NH@Z";
+    static const char* SYM_GHAST_DROPDEATHLOOT = "?dropDeathLoot@Ghast@@MEAAX_NH@Z";
+    static const char* SYM_LAVASLIME_DROPDEATHLOOT = "?dropDeathLoot@LavaSlime@@MEAAX_NH@Z";
+    static const char* SYM_WITHERBOSS_DROPDEATHLOOT = "?dropDeathLoot@WitherBoss@@MEAAX_NH@Z";
 
     static const char* SYM_INVENTORY_REMOVERESOURCE = "?removeResource@Inventory@@QEAA_NH@Z";
     static const char* SYM_INVENTORY_VFTABLE = "??_7Inventory@@6B@";
@@ -178,15 +220,15 @@ bool CoreSymbols::Resolve(SymbolResolver& resolver)
     pMinecraftSetLevel = resolver.Resolve(SYM_MINECRAFT_SETLEVEL);
     pExitGame = resolver.Resolve(SYM_EXIT_GAME);
     pPresent = resolver.Resolve(SYM_PRESENT);
-    pMinecraftApp = resolver.Resolve("?app@@3VCMinecraftApp@@A");
+    pMinecraftApp = resolver.ResolveOptional("?app@@3VCMinecraftApp@@A");
     if (!pMinecraftApp)
-        pMinecraftApp = resolver.ResolveExact("app");
-    pGetMinecraftLanguage = resolver.Resolve(SYM_GET_MINECRAFT_LANGUAGE);
+        pMinecraftApp = resolver.ResolveExactOptional("app");
+    pGetMinecraftLanguage = resolver.ResolveOptional(SYM_GET_MINECRAFT_LANGUAGE);
     if (!pGetMinecraftLanguage)
-        pGetMinecraftLanguage = resolver.ResolveExact("CMinecraftApp::GetMinecraftLanguage");
-    pGetMinecraftLocale = resolver.Resolve(SYM_GET_MINECRAFT_LOCALE);
+        pGetMinecraftLanguage = resolver.ResolveExactOptional("CMinecraftApp::GetMinecraftLanguage");
+    pGetMinecraftLocale = resolver.ResolveOptional(SYM_GET_MINECRAFT_LOCALE);
     if (!pGetMinecraftLocale)
-        pGetMinecraftLocale = resolver.ResolveExact("CMinecraftApp::GetMinecraftLocale");
+        pGetMinecraftLocale = resolver.ResolveExactOptional("CMinecraftApp::GetMinecraftLocale");
     return HasCritical();
 }
 
@@ -198,9 +240,9 @@ void CoreSymbols::Log() const
     LogSym("Minecraft::setLevel", pMinecraftSetLevel);
     LogSym("ExitGame", pExitGame);
     LogSym("C4JRender::Present", pPresent);
-    LogSym("app (CMinecraftApp)", pMinecraftApp);
-    LogSym("CMinecraftApp::GetMinecraftLanguage", pGetMinecraftLanguage);
-    LogSym("CMinecraftApp::GetMinecraftLocale", pGetMinecraftLocale);
+    LogSymOptional("app (CMinecraftApp)", pMinecraftApp);
+    LogSymOptional("CMinecraftApp::GetMinecraftLanguage", pGetMinecraftLanguage);
+    LogSymOptional("CMinecraftApp::GetMinecraftLocale", pGetMinecraftLocale);
 }
 
 bool CoreSymbols::HasCritical() const
@@ -331,6 +373,17 @@ bool ItemSymbols::Resolve(SymbolResolver& resolver)
     pItemInstanceOnCraftedBy = resolver.Resolve(SYM_ITEMINSTANCE_ONCRAFTEDBY);
     pItemInstanceInteractEnemy = resolver.Resolve(SYM_ITEMINSTANCE_INTERACTENEMY);
     pItemInstanceHurtEnemy = resolver.Resolve(SYM_ITEMINSTANCE_HURTENEMY);
+    if (SYM_ITEMINSTANCE_SETAUXVALUE)
+        pItemInstanceSetAuxValue = resolver.Resolve(SYM_ITEMINSTANCE_SETAUXVALUE);
+    pItemInstanceCtor = resolver.Resolve(SYM_ITEMINSTANCE_CTOR_INT);
+    pItemInstanceSharedPtrCtor = resolver.Resolve(SYM_ITEMINSTANCE_SHAREDPTR_CTOR);
+    pItemInstanceSharedPtrDtor = resolver.Resolve(SYM_ITEMINSTANCE_SHAREDPTR_DTOR);
+    pEntitySharedPtrCtor = resolver.Resolve(SYM_ENTITY_SHAREDPTR_CTOR);
+    pEntitySharedPtrDtor = resolver.Resolve(SYM_ENTITY_SHAREDPTR_DTOR);
+    pItemEntitySharedPtrDtor = resolver.Resolve(SYM_ITEMENTITY_SHAREDPTR_DTOR);
+    pItemEntityCtorWithItem = resolver.Resolve(SYM_ITEMENTITY_CTOR_WITH_ITEM);
+    pItemEntitySetItem = resolver.Resolve(SYM_ITEMENTITY_SETITEM);
+    pItemEntityMakeShared = resolver.Resolve(SYM_ITEMENTITY_MAKE_SHARED);
     pItemMineBlock = resolver.Resolve(SYM_ITEM_MINEBLOCK);
     pDiggerItemMineBlock = resolver.Resolve(SYM_DIGGERITEM_MINEBLOCK);
     pPickaxeItemGetDestroySpeed = resolver.Resolve(SYM_PICKAXEITEM_GETDESTROYSPEED);
@@ -358,11 +411,21 @@ void ItemSymbols::Log() const
     LogSym("ItemInstance::onCraftedBy", pItemInstanceOnCraftedBy);
     LogSym("ItemInstance::interactEnemy", pItemInstanceInteractEnemy);
     LogSym("ItemInstance::hurtEnemy", pItemInstanceHurtEnemy);
+    LogSymOptional("ItemInstance::setAuxValue", pItemInstanceSetAuxValue);
+    LogSym("ItemInstance::ItemInstance(int,int,int)", pItemInstanceCtor);
+    LogSym("std::shared_ptr<ItemInstance>::shared_ptr(ItemInstance*)", pItemInstanceSharedPtrCtor);
+    LogSym("std::shared_ptr<ItemInstance>::~shared_ptr", pItemInstanceSharedPtrDtor);
+    LogSym("std::shared_ptr<Entity>::shared_ptr(Entity*)", pEntitySharedPtrCtor);
+    LogSym("std::shared_ptr<Entity>::~shared_ptr", pEntitySharedPtrDtor);
+    LogSym("std::shared_ptr<ItemEntity>::~shared_ptr", pItemEntitySharedPtrDtor);
+    LogSym("ItemEntity::ItemEntity(Level,double,double,double,shared_ptr<ItemInstance>)", pItemEntityCtorWithItem);
+    LogSym("ItemEntity::setItem", pItemEntitySetItem);
+    LogSym("std::make_shared<ItemEntity>", pItemEntityMakeShared);
     LogSym("Item::mineBlock", pItemMineBlock);
     LogSym("DiggerItem::mineBlock", pDiggerItemMineBlock);
     LogSym("PickaxeItem::getDestroySpeed", pPickaxeItemGetDestroySpeed);
     LogSym("PickaxeItem::canDestroySpecial", pPickaxeItemCanDestroySpecial);
-    LogSym("ShovelItem::getDestroySpeed", pShovelItemGetDestroySpeed);
+    LogSym("DiggerItem::getDestroySpeed", pShovelItemGetDestroySpeed);
     LogSym("ShovelItem::canDestroySpecial", pShovelItemCanDestroySpecial);
     LogSym("ItemEntity::getItem", pItemEntityGetItem);
     LogSym("ItemRenderer::renderGuiItem", pItemRendererRenderGuiItem);
@@ -528,8 +591,8 @@ bool LevelSymbols::Resolve(SymbolResolver& resolver)
     pLevelChunkSetTileAndData = resolver.Resolve(SYM_LEVELCHUNK_SETTILEANDDATA);
     if (!pLevelChunkSetTileAndData)
         pLevelChunkSetTileAndData = resolver.ResolveExact("LevelChunk::setTileAndData");
-    pLevelChunkGetPos = resolver.ResolveExact("LevelChunk::getPos");
-    pLevelChunkGetHighestNonEmptyY = resolver.ResolveExact("LevelChunk::getHighestNonEmptyY");
+    pLevelChunkGetPos = resolver.ResolveExactOptional("LevelChunk::getPos");
+    pLevelChunkGetHighestNonEmptyY = resolver.ResolveExactOptional("LevelChunk::getHighestNonEmptyY");
     pCompressedTileStorageSet = resolver.ResolveExact("CompressedTileStorage::set");
     return true;
 }
@@ -552,13 +615,23 @@ void LevelSymbols::Log() const
     LogSym("LevelChunk::setTile", pLevelChunkSetTile);
     LogSym("LevelChunk::getData", pLevelChunkGetData);
     LogSym("LevelChunk::setTileAndData", pLevelChunkSetTileAndData);
-    LogSym("LevelChunk::getPos", pLevelChunkGetPos);
-    LogSym("LevelChunk::getHighestNonEmptyY", pLevelChunkGetHighestNonEmptyY);
+    LogSymOptional("LevelChunk::getPos", pLevelChunkGetPos);
+    LogSymOptional("LevelChunk::getHighestNonEmptyY", pLevelChunkGetHighestNonEmptyY);
     LogSym("CompressedTileStorage::set", pCompressedTileStorageSet);
 }
 
 bool EntitySymbols::Resolve(SymbolResolver& resolver)
 {
+    auto resolveWithExactOptional = [&resolver](const char* decoratedName, const char* exactNameA, const char* exactNameB = nullptr) -> void*
+    {
+        void* ptr = resolver.ResolveOptional(decoratedName);
+        if (!ptr && exactNameA && exactNameA[0])
+            ptr = resolver.ResolveExactOptional(exactNameA);
+        if (!ptr && exactNameB && exactNameB[0])
+            ptr = resolver.ResolveExactOptional(exactNameB);
+        return ptr;
+    };
+
     pPlayerCanDestroy = resolver.Resolve(SYM_PLAYER_CANDESTROY);
     pServerPlayerGameModeUseItem = resolver.Resolve(SYM_SERVER_PLAYER_GAMEMODE_USEITEM);
     pMultiPlayerGameModeUseItem = resolver.Resolve(SYM_MULTI_PLAYER_GAMEMODE_USEITEM);
@@ -579,6 +652,32 @@ bool EntitySymbols::Resolve(SymbolResolver& resolver)
     if (!pEntityGetLookAngle)
         pEntityGetLookAngle = resolver.Resolve(SYM_ENTITY_GETLOOKANGLE);
     pEntityLerpMotion = resolver.Resolve(SYM_ENTITY_LERPMOTION);
+    pEntitySpawnAtLocation = resolver.Resolve(SYM_ENTITY_SPAWNATLOCATION);
+    if (SYM_ENTITY_SPAWNATLOCATION_INT)
+        pEntitySpawnAtLocationInt = resolver.Resolve(SYM_ENTITY_SPAWNATLOCATION_INT);
+    pEntityGetEncodeId = resolver.Resolve(SYM_ENTITY_GETENCODEID);
+    pEntityGetEncodeIdById = resolver.ResolveOptional(SYM_ENTITY_GETENCODEID_BYID);
+    pEntityGetNetworkName = resolver.Resolve(SYM_ENTITY_GETNETWORKNAME);
+    pLivingEntityTickDeath = resolveWithExactOptional(SYM_LIVINGENTITY_TICKDEATH, "LivingEntity::tickDeath");
+    pLivingEntityDropDeathLoot = resolveWithExactOptional(SYM_LIVINGENTITY_DROPDEATHLOOT, "LivingEntity::dropDeathLoot");
+    pMobDropDeathLoot = resolveWithExactOptional(SYM_MOB_DROPDEATHLOOT, "Mob::dropDeathLoot");
+    pChickenDropDeathLoot = resolveWithExactOptional(SYM_CHICKEN_DROPDEATHLOOT, "Chicken::dropDeathLoot");
+    pCowDropDeathLoot = resolveWithExactOptional(SYM_COW_DROPDEATHLOOT, "Cow::dropDeathLoot");
+    pPigDropDeathLoot = resolveWithExactOptional(SYM_PIG_DROPDEATHLOOT, "Pig::dropDeathLoot");
+    pSheepDropDeathLoot = resolveWithExactOptional(SYM_SHEEP_DROPDEATHLOOT, "Sheep::dropDeathLoot");
+    pSquidDropDeathLoot = resolveWithExactOptional(SYM_SQUID_DROPDEATHLOOT, "Squid::dropDeathLoot");
+    pOcelotDropDeathLoot = resolveWithExactOptional(SYM_OCELOT_DROPDEATHLOOT, "Ocelot::dropDeathLoot", "Ozelot::dropDeathLoot");
+    pSnowManDropDeathLoot = resolveWithExactOptional(SYM_SNOWMAN_DROPDEATHLOOT, "SnowMan::dropDeathLoot");
+    pVillagerGolemDropDeathLoot = resolveWithExactOptional(SYM_VILLAGERGOLEM_DROPDEATHLOOT, "VillagerGolem::dropDeathLoot");
+    pPigZombieDropDeathLoot = resolveWithExactOptional(SYM_PIGZOMBIE_DROPDEATHLOOT, "PigZombie::dropDeathLoot");
+    pSpiderDropDeathLoot = resolveWithExactOptional(SYM_SPIDER_DROPDEATHLOOT, "Spider::dropDeathLoot");
+    pSkeletonDropDeathLoot = resolveWithExactOptional(SYM_SKELETON_DROPDEATHLOOT, "Skeleton::dropDeathLoot");
+    pWitchDropDeathLoot = resolveWithExactOptional(SYM_WITCH_DROPDEATHLOOT, "Witch::dropDeathLoot");
+    pBlazeDropDeathLoot = resolveWithExactOptional(SYM_BLAZE_DROPDEATHLOOT, "Blaze::dropDeathLoot");
+    pEnderManDropDeathLoot = resolveWithExactOptional(SYM_ENDERMAN_DROPDEATHLOOT, "EnderMan::dropDeathLoot");
+    pGhastDropDeathLoot = resolveWithExactOptional(SYM_GHAST_DROPDEATHLOOT, "Ghast::dropDeathLoot");
+    pLavaSlimeDropDeathLoot = resolveWithExactOptional(SYM_LAVASLIME_DROPDEATHLOOT, "LavaSlime::dropDeathLoot");
+    pWitherBossDropDeathLoot = resolveWithExactOptional(SYM_WITHERBOSS_DROPDEATHLOOT, "WitherBoss::dropDeathLoot");
     return true;
 }
 
@@ -600,6 +699,36 @@ void EntitySymbols::Log() const
     LogSym("LivingEntity::getViewVector", pLivingEntityGetViewVector);
     LogSym("LivingEntity::pick", pLivingEntityPick);
     LogSym("Entity::lerpMotion", pEntityLerpMotion);
+    LogSym("Entity::spawnAtLocation", pEntitySpawnAtLocation);
+    LogSymOptional("Entity::spawnAtLocation(int,int,float)", pEntitySpawnAtLocationInt);
+    if (SYM_ENTITY_SPAWNATLOCATION_INT && !pEntitySpawnAtLocationInt)
+    {
+        // Provide candidates when the int overload is missing.
+        PdbParser::DumpMatching("spawnAtLocation@Entity@@");
+    }
+    LogSym("EntityIO::getEncodeId", pEntityGetEncodeId);
+    LogSym("EntityIO::getEncodeId(int)", pEntityGetEncodeIdById);
+    LogSym("Entity::getNetworkName", pEntityGetNetworkName);
+    LogSym("LivingEntity::tickDeath", pLivingEntityTickDeath);
+    LogSym("LivingEntity::dropDeathLoot", pLivingEntityDropDeathLoot);
+    LogSym("Mob::dropDeathLoot", pMobDropDeathLoot);
+    LogSym("Chicken::dropDeathLoot", pChickenDropDeathLoot);
+    LogSym("Cow::dropDeathLoot", pCowDropDeathLoot);
+    LogSym("Pig::dropDeathLoot", pPigDropDeathLoot);
+    LogSym("Sheep::dropDeathLoot", pSheepDropDeathLoot);
+    LogSym("Squid::dropDeathLoot", pSquidDropDeathLoot);
+    LogSym("Ocelot::dropDeathLoot", pOcelotDropDeathLoot);
+    LogSym("SnowMan::dropDeathLoot", pSnowManDropDeathLoot);
+    LogSym("VillagerGolem::dropDeathLoot", pVillagerGolemDropDeathLoot);
+    LogSym("PigZombie::dropDeathLoot", pPigZombieDropDeathLoot);
+    LogSym("Spider::dropDeathLoot", pSpiderDropDeathLoot);
+    LogSym("Skeleton::dropDeathLoot", pSkeletonDropDeathLoot);
+    LogSym("Witch::dropDeathLoot", pWitchDropDeathLoot);
+    LogSym("Blaze::dropDeathLoot", pBlazeDropDeathLoot);
+    LogSym("EnderMan::dropDeathLoot", pEnderManDropDeathLoot);
+    LogSym("Ghast::dropDeathLoot", pGhastDropDeathLoot);
+    LogSym("LavaSlime::dropDeathLoot", pLavaSlimeDropDeathLoot);
+    LogSym("WitherBoss::dropDeathLoot", pWitherBossDropDeathLoot);
 }
 
 bool InventorySymbols::Resolve(SymbolResolver& resolver)

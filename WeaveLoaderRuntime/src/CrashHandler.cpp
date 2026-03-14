@@ -93,6 +93,35 @@ static bool ShouldWriteVectoredReport(EXCEPTION_RECORD* er)
     if (!er)
         return false;
 
+    if (s_runtimeModule)
+    {
+        void* frames[64] = {};
+        USHORT count = RtlCaptureStackBackTrace(0, 64, frames, nullptr);
+        for (USHORT i = 0; i < count; ++i)
+        {
+            HMODULE hMod = nullptr;
+            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                   reinterpret_cast<LPCSTR>(frames[i]), &hMod) &&
+                hMod == s_runtimeModule)
+            {
+                return true;
+            }
+        }
+    }
+
+    if (s_runtimeModule)
+    {
+        HMODULE hMod = nullptr;
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCSTR>(er->ExceptionAddress), &hMod) &&
+            hMod == s_runtimeModule)
+        {
+            return true;
+        }
+    }
+
     switch (er->ExceptionCode)
     {
     case STATUS_STACK_BUFFER_OVERRUN:
